@@ -6,6 +6,8 @@ using System.Runtime.InteropServices;
 using Frontend.Desktop.UiDsl;
 using Frontend.Desktop.MessageBus;
 using Frontend.Desktop.State;
+using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace Frontend.Desktop
 {
@@ -36,6 +38,12 @@ namespace Frontend.Desktop
         // Main loop control
         private static bool _running = true;
         private static bool _sceneNeedsUpdate = true;
+
+        // Track last hovered node for efficient rendering
+        private static UiDsl.SceneNode? _hoveredNode = null;
+
+        // Dictionary to store dynamic action handlers
+        private static Dictionary<string, Action> _actionHandlers = new Dictionary<string, Action>();
 
         static void Main(string[] args)
         {
@@ -211,6 +219,11 @@ namespace Frontend.Desktop
                     {
                         HandleMouseClick(sdlEvent.button.x, sdlEvent.button.y);
                     }
+                    else if (sdlEvent.type == SDL.SDL_EventType.SDL_MOUSEMOTION)
+                    {
+                        // Track mouse position for hover effects
+                        HandleMouseMove(sdlEvent.motion.x, sdlEvent.motion.y);
+                    }
                 }
 
                 // Render frame if needed
@@ -260,21 +273,434 @@ namespace Frontend.Desktop
 
         static void HandleMouseClick(int x, int y)
         {
-            // In a full implementation, this would find the node at the given coordinates
-            // and trigger its onClick handler by sending a message through the bus
-            Console.WriteLine($"Mouse clicked at: {x}, {y}");
+            if (_rootNode == null) return;
             
-            // For demonstration, toggle sidebar on clicks in the left area
-            if (x < 200)
+            // Find the node at the click position
+            var clickedNode = HitTest(_rootNode, x, y);
+            if (clickedNode != null)
             {
-                _appStore.ToggleSidebar();
+                // Process the OnClick action
+                string onClickAction = clickedNode.OnClick;
+                if (!string.IsNullOrEmpty(onClickAction))
+                {
+                    ProcessAction(onClickAction);
+                }
+                
+                Console.WriteLine($"Clicked: {clickedNode.Type} at ({x}, {y}) with action: {onClickAction}");
             }
-            // Handle navigation menu clicks
-            else if (x > 200 && x < 800 && y > 60 && y < 150)
+            else
             {
-                _appStore.NavigateTo("clicked");
+                Console.WriteLine($"No node found at: {x}, {y}");
+            }
+        }
+        
+        static UiDsl.SceneNode? HitTest(UiDsl.SceneNode node, int x, int y, SKPoint parentPosition = default)
+        {
+            // Calculate absolute position
+            var position = new SKPoint(
+                parentPosition.X + node.X,
+                parentPosition.Y + node.Y
+            );
+            
+            // Check if point is within this node's bounds
+            bool isInside = x >= position.X && 
+                            x <= position.X + node.Width && 
+                            y >= position.Y && 
+                            y <= position.Y + node.Height;
+            
+            if (!isInside) return null;
+            
+            // Check children first (top-most node gets priority)
+            if (node.Children != null)
+            {
+                // Iterate in reverse order to check topmost nodes first
+                for (int i = node.Children.Count - 1; i >= 0; i--)
+                {
+                    var childHit = HitTest(node.Children[i], x, y, position);
+                    if (childHit != null)
+                        return childHit;
+                }
+            }
+            
+            // If no children were hit, return this node if it has an onclick action
+            if (!string.IsNullOrEmpty(node.OnClick) || node.Type == UiDsl.NodeType.Button)
+                return node;
+                
+            return null;
+        }
+        
+        static void ProcessAction(string action)
+        {
+            // First check if we have a custom handler registered
+            if (_actionHandlers.TryGetValue(action, out var handler))
+            {
+                handler();
+                return;
+            }
+            
+            // Parse action format: ActionName:Param
+            string[] parts = action.Split(':', 2);
+            string actionName = parts[0];
+            string param = parts.Length > 1 ? parts[1] : string.Empty;
+            
+            Console.WriteLine($"Processing action: {actionName} with param: {param}");
+            
+            switch (actionName)
+            {
+                case "NavigateTo":
+                    _appStore.NavigateTo(param);
+                    // Update the UI to reflect navigation
+                    UpdateUiForNavigation(param);
+                    Console.WriteLine($"Navigating to: {param}");
+                    break;
+                    
+                case "ShowMessage":
+                    ShowMessageBox(param, "MBV Information");
+                    break;
+                    
+                case "ToggleSidebar":
+                    _appStore.ToggleSidebar();
+                    // Toggle sidebar visibility in the UI
+                    if (_rootNode != null)
+                    {
+                        var sidebar = FindNodeById(_rootNode, "sidebar");
+                        if (sidebar != null)
+                        {
+                            sidebar.Visible = _appStore.IsSidebarOpen;
+                        }
+                    }
+                    break;
+                    
+                case "AddNote":
+                    // Example of async action
+                    Task.Run(async () =>
+                    {
+                        await _appStore.AddNote("New Note", "This is a note added from UI click");
+                        Console.WriteLine("Note added successfully!");
+                        // Show confirmation in UI
+                        ShowNotification("Note added successfully!");
+                    });
+                    break;
+                    
+                case "CloseMessage":
+                    // Find and remove message overlay
+                    if (_rootNode != null)
+                    {
+                        var overlay = FindNodeById(_rootNode, "message_overlay");
+                        if (overlay != null && _rootNode.Children.Contains(overlay))
+                        {
+                            _rootNode.Children.Remove(overlay);
+                        }
+                    }
+                    break;
+                    
+                default:
+                    Console.WriteLine($"Unknown action: {actionName}");
+                    break;
+            }
+            
+            _sceneNeedsUpdate = true;
+        }
+        
+        static void ShowMessageBox(string message, string title)
+        {
+            Console.WriteLine($"[MessageBox] {title}: {message}");
+            
+            // Create a visible message box in the UI
+            if (_rootNode != null)
+            {
+                // Create an overlay
+                var overlay = new UiDsl.SceneNode
+                {
+                    Id = "message_overlay",
+                    Type = UiDsl.NodeType.Container,
+                    X = 0,
+                    Y = 0,
+                    Width = Width,
+                    Height = Height,
+                    BackgroundColor = new SKColor(0, 0, 0, 150)
+                };
+                
+                // Create message box
+                var msgBox = new UiDsl.SceneNode
+                {
+                    Id = "message_box",
+                    Type = UiDsl.NodeType.Container,
+                    X = Width / 2 - 200,
+                    Y = Height / 2 - 100,
+                    Width = 400,
+                    Height = 200,
+                    BackgroundColor = SKColors.White,
+                    BorderColor = new SKColor(59, 130, 246),
+                    BorderWidth = 2
+                };
+                
+                // Add title
+                var titleNode = new UiDsl.SceneNode
+                {
+                    Id = "message_title",
+                    Type = UiDsl.NodeType.Text,
+                    X = 20,
+                    Y = 20,
+                    Text = title,
+                    FontSize = 18,
+                    TextColor = new SKColor(59, 130, 246)
+                };
+                msgBox.AddChild(titleNode);
+                
+                // Add message
+                var messageNode = new UiDsl.SceneNode
+                {
+                    Id = "message_content",
+                    Type = UiDsl.NodeType.Text,
+                    X = 20,
+                    Y = 60,
+                    Text = message,
+                    FontSize = 16,
+                    TextColor = SKColors.Black
+                };
+                msgBox.AddChild(messageNode);
+                
+                // Add OK button
+                var okButton = new UiDsl.SceneNode
+                {
+                    Id = "message_ok",
+                    Type = UiDsl.NodeType.Rectangle,
+                    X = 150,
+                    Y = 130,
+                    Width = 100,
+                    Height = 40,
+                    FillColor = new SKColor(59, 130, 246),
+                    BorderColor = new SKColor(29, 78, 216),
+                    BorderWidth = 2,
+                    OnClick = "CloseMessage"
+                };
+                
+                var buttonText = new UiDsl.SceneNode
+                {
+                    Type = UiDsl.NodeType.Text,
+                    X = 38,
+                    Y = 10,
+                    Text = "OK",
+                    FontSize = 16,
+                    TextColor = SKColors.White
+                };
+                okButton.AddChild(buttonText);
+                
+                msgBox.AddChild(okButton);
+                overlay.AddChild(msgBox);
+                
+                // Add to scene
+                _rootNode.AddChild(overlay);
                 _sceneNeedsUpdate = true;
             }
+        }
+        
+        static void ShowNotification(string message)
+        {
+            // Create a notification that automatically disappears
+            if (_rootNode != null)
+            {
+                var notif = new UiDsl.SceneNode
+                {
+                    Id = "notification",
+                    Type = UiDsl.NodeType.Container,
+                    X = Width - 320,
+                    Y = 70,
+                    Width = 300,
+                    Height = 60,
+                    BackgroundColor = new SKColor(34, 197, 94), // Green
+                    BorderColor = new SKColor(21, 128, 61),
+                    BorderWidth = 1
+                };
+                
+                var notifText = new UiDsl.SceneNode
+                {
+                    Type = UiDsl.NodeType.Text,
+                    X = 15,
+                    Y = 20,
+                    Text = message,
+                    FontSize = 16,
+                    TextColor = SKColors.White
+                };
+                notif.AddChild(notifText);
+                
+                _rootNode.AddChild(notif);
+                
+                // Set up a timer to remove the notification
+                Task.Run(async () =>
+                {
+                    await Task.Delay(3000); // 3 seconds
+                    var existingNotif = FindNodeById(_rootNode, "notification");
+                    if (existingNotif != null && _rootNode.Children.Contains(existingNotif))
+                    {
+                        _rootNode.Children.Remove(existingNotif);
+                        _sceneNeedsUpdate = true;
+                    }
+                });
+            }
+        }
+        
+        static void UpdateUiForNavigation(string view)
+        {
+            if (_rootNode == null) return;
+            
+            // Find the main content container
+            var contentContainer = _rootNode.Children.Find(n => 
+                n.Type == UiDsl.NodeType.Container && 
+                n.X >= 200 && n.Y >= 60 && 
+                n.Width >= 500);
+                
+            if (contentContainer == null) return;
+            
+            // Find the content area's inner container
+            var innerContainer = contentContainer.Children.Find(c => 
+                c.Type == UiDsl.NodeType.Container && c.Width > 400);
+                
+            if (innerContainer == null && contentContainer.Children.Count > 0)
+            {
+                innerContainer = contentContainer.Children[0];
+            }
+            
+            // If we found a container to update
+            if (innerContainer != null)
+            {
+                // Clear existing children
+                innerContainer.Children.Clear();
+                
+                // Add a title based on the view
+                var titleText = view switch
+                {
+                    "home" => "Home Page",
+                    "notes" => "Notes Page",
+                    "settings" => "Settings Page",
+                    _ => $"View: {view}"
+                };
+                
+                var titleNode = new UiDsl.SceneNode
+                {
+                    Type = UiDsl.NodeType.Text,
+                    X = 0,
+                    Y = 0,
+                    Text = titleText,
+                    FontSize = 32,
+                    TextColor = new SKColor(51, 65, 85)
+                };
+                innerContainer.AddChild(titleNode);
+                
+                // Add some content
+                var contentText = view switch
+                {
+                    "home" => "Welcome to the home page of the MBV application!",
+                    "notes" => "This is where your notes would be displayed.",
+                    "settings" => "Here you can configure application settings.",
+                    _ => $"Content for '{view}' view"
+                };
+                
+                var contentNode = new UiDsl.SceneNode
+                {
+                    Type = UiDsl.NodeType.Text,
+                    X = 0,
+                    Y = 50,
+                    Text = contentText,
+                    FontSize = 16,
+                    TextColor = new SKColor(100, 116, 139)
+                };
+                innerContainer.AddChild(contentNode);
+                
+                // Add a button
+                var button = new UiDsl.SceneNode
+                {
+                    Type = UiDsl.NodeType.Rectangle,
+                    X = 0,
+                    Y = 100,
+                    Width = 200,
+                    Height = 50,
+                    FillColor = new SKColor(59, 130, 246),
+                    BorderColor = new SKColor(29, 78, 216),
+                    BorderWidth = 2,
+                    OnClick = $"ShowMessage:{titleText} button clicked!"
+                };
+                
+                var buttonText = new UiDsl.SceneNode
+                {
+                    Type = UiDsl.NodeType.Text,
+                    X = 40,
+                    Y = 15,
+                    Text = "Click Me",
+                    FontSize = 18,
+                    TextColor = SKColors.White
+                };
+                button.AddChild(buttonText);
+                
+                innerContainer.AddChild(button);
+            }
+            
+            // Highlight the selected navigation item
+            HighlightSelectedNavItem(view);
+            
+            _sceneNeedsUpdate = true;
+        }
+        
+        static void HighlightSelectedNavItem(string view)
+        {
+            if (_rootNode == null) return;
+            
+            // Find the sidebar container
+            var sidebar = _rootNode.Children.Find(n => 
+                n.Type == UiDsl.NodeType.Container && 
+                n.X == 0 && n.Y >= 60 && 
+                n.Width <= 200);
+                
+            if (sidebar == null) return;
+            
+            // Find all navigation buttons
+            foreach (var child in sidebar.Children)
+            {
+                if (child.Type == UiDsl.NodeType.Rectangle)
+                {
+                    // Check if this button is for the current view
+                    bool isSelected = false;
+                    if (child.OnClick.StartsWith("NavigateTo:"))
+                    {
+                        string buttonView = child.OnClick.Split(':')[1];
+                        isSelected = buttonView.Equals(view, StringComparison.OrdinalIgnoreCase);
+                    }
+                    
+                    // Update appearance based on selection state
+                    if (isSelected)
+                    {
+                        child.FillColor = new SKColor(219, 234, 254); // Light blue
+                        child.BorderColor = new SKColor(59, 130, 246); // Blue
+                        child.BorderWidth = 2;
+                    }
+                    else
+                    {
+                        child.FillColor = new SKColor(224, 242, 254); // Very light blue
+                        child.BorderColor = new SKColor(56, 189, 248); // Light blue
+                        child.BorderWidth = 0;
+                    }
+                }
+            }
+        }
+
+        // Helper method to find a node by ID
+        static UiDsl.SceneNode? FindNodeById(UiDsl.SceneNode root, string id)
+        {
+            if (root.Id == id)
+                return root;
+                
+            if (root.Children != null)
+            {
+                foreach (var child in root.Children)
+                {
+                    var result = FindNodeById(child, id);
+                    if (result != null)
+                        return result;
+                }
+            }
+            
+            return null;
         }
 
         static void Cleanup()
@@ -284,6 +710,60 @@ namespace Frontend.Desktop
             SDL.SDL_DestroyRenderer(_renderer);
             SDL.SDL_DestroyWindow(_window);
             SDL.SDL_Quit();
+        }
+
+        static void HandleMouseMove(int x, int y)
+        {
+            if (_rootNode == null) return;
+            
+            // Find the node at the cursor position
+            var hoveredNode = HitTest(_rootNode, x, y);
+            
+            // Only update UI if the hovered node changed
+            if (hoveredNode != _hoveredNode)
+            {
+                // Reset hover state on previously hovered node
+                if (_hoveredNode != null)
+                {
+                    // We'd set some hover state in a full implementation
+                    Console.WriteLine($"Hover exit: {_hoveredNode.Type}");
+                }
+                
+                // Set hover state on new node
+                _hoveredNode = hoveredNode;
+                
+                // Update the renderer's hovered node
+                _skRenderer.SetHoveredNode(_hoveredNode);
+                
+                if (_hoveredNode != null)
+                {
+                    // Trigger hover action if any
+                    if (!string.IsNullOrEmpty(_hoveredNode.OnHover))
+                    {
+                        ProcessAction(_hoveredNode.OnHover);
+                    }
+                    
+                    Console.WriteLine($"Hover enter: {_hoveredNode.Type}");
+                    
+                    // Change cursor to hand for clickable elements
+                    if (!string.IsNullOrEmpty(_hoveredNode.OnClick))
+                    {
+                        SDL.SDL_SetCursor(SDL.SDL_CreateSystemCursor(SDL.SDL_SystemCursor.SDL_SYSTEM_CURSOR_HAND));
+                    }
+                    else
+                    {
+                        SDL.SDL_SetCursor(SDL.SDL_CreateSystemCursor(SDL.SDL_SystemCursor.SDL_SYSTEM_CURSOR_ARROW));
+                    }
+                }
+                else
+                {
+                    // Reset cursor
+                    SDL.SDL_SetCursor(SDL.SDL_CreateSystemCursor(SDL.SDL_SystemCursor.SDL_SYSTEM_CURSOR_ARROW));
+                }
+                
+                // Update the UI
+                _sceneNeedsUpdate = true;
+            }
         }
     }
 }
