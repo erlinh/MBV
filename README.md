@@ -15,6 +15,14 @@
       └────────────────────────────────┴──────── Re‑render ◄─────┘
 ```
 
+```mermaid
+flowchart LR
+    V[View<br><sub>Declarative UI</sub>] -->|User Action| M[Message<br><sub>Command or Query</sub>]
+    M -->|Dispatch| B[Backend<br><sub>Command/Query Handler</sub>]
+    B -->|Result<br>New State| R[Render<br><sub>Updated View</sub>]
+    R -->|Re-render| V
+```
+
 * **Unidirectional flow** eliminates hidden side‑effects.
 * **Messages** are *the only* way the UI talks to code; every mutation is explicit, loggable, and testable.
 * **Backend** logic is written **once** and exposed through **two interchangeable transports**:
@@ -55,7 +63,7 @@
 │   ├── Queries/               # e.g. GetUserQuery.cs
 │   └── Contracts.csproj       # Referenced by both ends
 ├── Tools/
-│   ├── skappa-cli/            # dev, build, docgen commands
+│   ├── mbv-cli/            # dev, build, docgen commands
 │   └── scripts/               # CI helpers
 └── MyApp.sln
 ```
@@ -68,7 +76,7 @@
 2. Selected port / pipe name is written to a temp file:
 
    ```json
-   { "transport":"inproc", "endpoint":"pipe://skappa_54321" }
+   { "transport":"inproc", "endpoint":"pipe://mbv_54321" }
    ```
 3. **Frontend** reads this marker, instantiates a **MessageBusClient** with appropriate transport.
 4. UI DSL is parsed → scene graph → first render.
@@ -99,7 +107,7 @@ public class SaveNoteHandler : ICommandHandler<SaveNoteCommand, SaveNoteResult>
   [HttpPost("save-note")] public Task<SaveNoteResult> Save([FromBody]SaveNoteCommand c)
       => _bus.Send(c);
   ```
-* **Swashbuckle** auto‑generates the OpenAPI JSON; `skappa docgen` copies it to `/docs/api.yaml`.
+* **Swashbuckle** auto‑generates the OpenAPI JSON; `mbv docgen` copies it to `/docs/api.yaml`.
 
 ---
 
@@ -154,10 +162,10 @@ public class AppStore
 
 | Command         | Purpose                                                       |
 | --------------- | ------------------------------------------------------------- |
-| `skappa dev`    | Hot‑reload UI + backend (HTTP enabled, Swagger at `/swagger`) |
-| `skappa test`   | Spins up backend in‑proc, runs xUnit tests hitting handlers   |
-| `skappa docgen` | Exports combined OpenAPI + mermaid diagrams for docs          |
-| `skappa build`  | Publishes single‑file exe (HTTP layer stripped)               |
+| `mbv dev`    | Hot‑reload UI + backend (HTTP enabled, Swagger at `/swagger`) |
+| `mbv test`   | Spins up backend in‑proc, runs xUnit tests hitting handlers   |
+| `mbv docgen` | Exports combined OpenAPI + mermaid diagrams for docs          |
+| `mbv build`  | Publishes single‑file exe (HTTP layer stripped)               |
 
 *Live UI Inspector* shows current store snapshot & message log (similar to Redux DevTools).
 
