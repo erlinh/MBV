@@ -1,0 +1,20 @@
+<view 
+  id="{id}" 
+  x="{x}" 
+  y="{y}" 
+  width="{width}" 
+  height="{height}" 
+  backgroundColor="{backgroundColor || '#FFFFFF'}" 
+  borderColor="{borderColor || '#E2E8F0'}" 
+  borderWidth="{borderWidth || '1'}">
+  
+  <view x="0" y="0" width="{width}" height="40" backgroundColor="{headerColor || '#F8FAFC'}">
+    <slot name="header">
+      <text x="16" y="12" text="{title || 'Card Title'}" fontSize="{titleSize || '16'}" textColor="{titleColor || '#334155'}"></text>
+    </slot>
+  </view>
+  
+  <view x="0" y="40" width="{width}" height="{height - 40}">
+    <slot></slot>
+  </view>
+</view> 

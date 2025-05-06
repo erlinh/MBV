@@ -15,12 +15,36 @@ namespace Frontend.Desktop.UiDsl
     {
         private readonly Dictionary<string, Func<Dictionary<string, string>, SceneNode>> _componentFactories = 
             new Dictionary<string, Func<Dictionary<string, string>, SceneNode>>(StringComparer.OrdinalIgnoreCase);
-
+            
+        private StreamWriter _logFile;
+        
         public JsxParser()
         {
+            // Create log file
+            string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs", "jsx_parser.log");
+            Directory.CreateDirectory(Path.GetDirectoryName(logPath));
+            _logFile = new StreamWriter(logPath, true);
+            _logFile.AutoFlush = true;
+            
+            LogToFile("JSX Parser initialized");
+            
             // Register built-in components
             RegisterBuiltInComponents();
-            Console.WriteLine("Initialized JSX parser with built-in components");
+            LogToFile("Initialized JSX parser with built-in components");
+        }
+        
+        ~JsxParser()
+        {
+            // Ensure log file is closed
+            _logFile?.Close();
+        }
+        
+        private void LogToFile(string message)
+        {
+            string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            _logFile.WriteLine($"[{timestamp}] {message}");
+            // Also log to console for now
+            Console.WriteLine(message);
         }
 
         /// <summary>
@@ -32,7 +56,7 @@ namespace Frontend.Desktop.UiDsl
                 throw new FileNotFoundException($"JSX UI file not found: {filePath}");
 
             string content = File.ReadAllText(filePath);
-            Console.WriteLine($"Parsing JSX file: {filePath} ({content.Length} bytes)");
+            LogToFile($"Parsing JSX file: {filePath} ({content.Length} bytes)");
             return ParseString(content);
         }
 
@@ -41,7 +65,7 @@ namespace Frontend.Desktop.UiDsl
         /// </summary>
         public SceneNode ParseString(string content)
         {
-            Console.WriteLine("Parsing JSX string");
+            LogToFile("Parsing JSX string");
             
             // Clean up content
             content = StripComments(content.Trim());
@@ -50,10 +74,12 @@ namespace Frontend.Desktop.UiDsl
             var root = ParseElement(content, 0, out _);
             if (root == null)
             {
-                throw new FormatException("Failed to parse JSX: no root element found");
+                string error = "Failed to parse JSX: no root element found";
+                LogToFile(error);
+                throw new FormatException(error);
             }
             
-            Console.WriteLine($"Successfully parsed JSX with root node of type {root.Type} with {root.Children?.Count ?? 0} children");
+            LogToFile($"Successfully parsed JSX with root node of type {root.Type} with {root.Children?.Count ?? 0} children");
             
             // Debug output - print node tree
             PrintNodeTree(root, 0);
@@ -67,7 +93,7 @@ namespace Frontend.Desktop.UiDsl
         public void RegisterComponent(string name, Func<Dictionary<string, string>, SceneNode> factory)
         {
             _componentFactories[name] = factory;
-            Console.WriteLine($"Registered component: {name}");
+            LogToFile($"Registered component: {name}");
         }
 
         private string StripComments(string content)
@@ -101,12 +127,15 @@ namespace Frontend.Desktop.UiDsl
                 return null;
                 
             string tagName = content.Substring(tagNameStart, tagNameEnd - tagNameStart);
-            Console.WriteLine($"Parsing element: <{tagName}>");
+            LogToFile($"Parsing element: <{tagName}>");
             
             // Find the end of opening tag
             int openTagEnd = content.IndexOf('>', tagNameEnd);
             if (openTagEnd < 0)
+            {
+                LogToFile($"Error: No closing '>' found for tag <{tagName}>");
                 return null;
+            }
                 
             // Check if it's a self-closing tag
             bool isSelfClosing = content[openTagEnd - 1] == '/';
@@ -120,17 +149,18 @@ namespace Frontend.Desktop.UiDsl
             SceneNode node;
             if (_componentFactories.TryGetValue(tagName, out var factory))
             {
-                Console.WriteLine($"Creating custom component: {tagName}");
+                LogToFile($"Creating custom component: {tagName}");
                 node = factory(props);
             }
             else
             {
-                Console.WriteLine($"Creating standard node: {tagName}");
+                LogToFile($"Creating standard node: {tagName}");
                 node = CreateNodeFromTag(tagName, props);
             }
             
             if (isSelfClosing)
             {
+                LogToFile($"Processing self-closing tag: <{tagName}/>");
                 endIndex = openTagEnd + 1;
                 return node;
             }
@@ -146,13 +176,19 @@ namespace Frontend.Desktop.UiDsl
             
             while (currentPos < content.Length)
             {
-                // Check for nested opening tag
+                // Check for nested opening tag of same type
                 if (currentPos + tagName.Length + 1 < content.Length && 
                     content[currentPos] == '<' && 
                     content.Substring(currentPos + 1, tagName.Length) == tagName &&
                     !char.IsLetterOrDigit(content[currentPos + tagName.Length + 1]))
                 {
-                    depth++;
+                    // Check if it's not a self-closing tag
+                    int nextClosePos = content.IndexOf('>', currentPos);
+                    if (nextClosePos > 0 && content[nextClosePos - 1] != '/')
+                    {
+                        depth++;
+                        LogToFile($"Found nested opening <{tagName}>, depth now: {depth}");
+                    }
                 }
                 
                 // Check for closing tag
@@ -160,6 +196,7 @@ namespace Frontend.Desktop.UiDsl
                     content.Substring(currentPos, closingTag.Length) == closingTag)
                 {
                     depth--;
+                    LogToFile($"Found closing </{tagName}>, depth now: {depth}");
                     if (depth == 0)
                     {
                         closingTagPos = currentPos;
@@ -172,7 +209,19 @@ namespace Frontend.Desktop.UiDsl
             
             if (closingTagPos < 0)
             {
-                Console.WriteLine($"Warning: No closing tag found for <{tagName}>");
+                LogToFile($"Warning: No closing tag found for <{tagName}>");
+                
+                // Special case for elements that are often self-closing
+                if (tagName.ToLower() == "circle" || tagName.ToLower() == "image" || 
+                    tagName.ToLower() == "text" || tagName.ToLower() == "box" ||
+                    tagName.ToLower() == "slot")
+                {
+                    // Treat as implicitly self-closed
+                    LogToFile($"Treating <{tagName}> as implicitly self-closed");
+                    endIndex = openTagEnd + 1;
+                    return node;
+                }
+                
                 endIndex = openTagEnd + 1;
                 return node;
             }
@@ -184,7 +233,7 @@ namespace Frontend.Desktop.UiDsl
             if (node.Type == NodeType.Text && !childrenContent.Trim().StartsWith("<"))
             {
                 node.Text = childrenContent.Trim();
-                Console.WriteLine($"Set text content: \"{node.Text}\"");
+                LogToFile($"Set text content: \"{node.Text}\"");
             }
             else if (!string.IsNullOrWhiteSpace(childrenContent))
             {
@@ -205,7 +254,7 @@ namespace Frontend.Desktop.UiDsl
                         if (childNode != null)
                         {
                             node.AddChild(childNode);
-                            Console.WriteLine($"Added child node of type {childNode.Type} to {node.Type}");
+                            LogToFile($"Added child node of type {childNode.Type} to {node.Type}");
                         }
                         childPos = childEndPos;
                     }
@@ -219,7 +268,7 @@ namespace Frontend.Desktop.UiDsl
             }
             
             endIndex = closingTagPos + closingTag.Length;
-            Console.WriteLine($"Finished parsing <{tagName}> with {node.Children?.Count ?? 0} children");
+            LogToFile($"Finished parsing <{tagName}> with {node.Children?.Count ?? 0} children");
             return node;
         }
 
@@ -255,7 +304,7 @@ namespace Frontend.Desktop.UiDsl
                 }
                 
                 props[name] = value;
-                Console.WriteLine($"Parsed prop: {name}={value}");
+                LogToFile($"Parsed prop: {name}={value}");
             }
             
             return props;
@@ -271,15 +320,36 @@ namespace Frontend.Desktop.UiDsl
                 "circle" => NodeType.Circle,
                 "image" => NodeType.Image,
                 "button" => NodeType.Button,
+                "input" => NodeType.Input,
+                "checkbox" => NodeType.Checkbox,
+                "radio" => NodeType.RadioButton,
+                "radiobutton" => NodeType.RadioButton,
+                "slider" => NodeType.Slider,
+                "dropdown" => NodeType.DropDown,
+                "select" => NodeType.DropDown,
+                "slot" => NodeType.Container, // Handle slot tags as container nodes
                 _ => throw new FormatException($"Unknown tag: {tagName}")
             };
             
             var node = new SceneNode { Type = nodeType };
-            Console.WriteLine($"Created node of type {nodeType}");
+            LogToFile($"Created node of type {nodeType}");
             
             // Default values for width and height to ensure visibility
             if (!props.ContainsKey("width")) node.Width = 100;
             if (!props.ContainsKey("height")) node.Height = 30;
+            
+            // For slot nodes, set an identifier
+            if (tagName.ToLower() == "slot")
+            {
+                if (props.ContainsKey("name"))
+                {
+                    node.Id = $"slot_{props["name"]}";
+                }
+                else
+                {
+                    node.Id = "default_slot";
+                }
+            }
             
             // Set properties based on props dictionary
             foreach (var prop in props)
@@ -294,6 +364,59 @@ namespace Frontend.Desktop.UiDsl
         {
             try
             {
+                // Handle empty values properly
+                if (string.IsNullOrWhiteSpace(propValue))
+                {
+                    LogToFile($"Empty value for property {propName}, using appropriate default");
+                    
+                    // For numeric properties, use sensible defaults
+                    switch (propName.ToLower())
+                    {
+                        case "x":
+                        case "y":
+                            // Default position to 0
+                            if (propName.ToLower() == "x") node.X = 0;
+                            if (propName.ToLower() == "y") node.Y = 0;
+                            break;
+                            
+                        case "width":
+                            // Default width based on type
+                            node.Width = node.Type == NodeType.Text ? 100 : 
+                                       node.Type == NodeType.Button ? 150 : 200;
+                            break;
+                            
+                        case "height":
+                            // Default height based on type
+                            node.Height = node.Type == NodeType.Text ? 30 : 
+                                        node.Type == NodeType.Button ? 40 : 30;
+                            break;
+                            
+                        case "fontsize":
+                        case "size":
+                            // Default font size
+                            node.FontSize = 14;
+                            break;
+                            
+                        case "borderwidth":
+                            // Default border width
+                            node.BorderWidth = 1;
+                            break;
+                            
+                        case "borderradius":
+                        case "radius":
+                            // Default radius
+                            node.BorderRadius = 5;
+                            break;
+                            
+                        // For other properties, just record we're skipping
+                        default:
+                            LogToFile($"Skipping empty property {propName}");
+                            break;
+                    }
+                    
+                    return;
+                }
+                
                 switch (propName.ToLower())
                 {
                     case "id":
@@ -321,6 +444,10 @@ namespace Frontend.Desktop.UiDsl
                         break;
                     case "borderwidth":
                         node.BorderWidth = float.Parse(propValue);
+                        break;
+                    case "borderradius":
+                    case "radius":
+                        node.BorderRadius = float.Parse(propValue);
                         break;
                     case "fillcolor":
                     case "fill":
@@ -357,6 +484,32 @@ namespace Frontend.Desktop.UiDsl
                     case "padding":
                         node.Padding = float.Parse(propValue);
                         break;
+                    // Interactive properties
+                    case "value":
+                        node.Value = propValue;
+                        break;
+                    case "placeholder":
+                        node.Placeholder = propValue;
+                        break;
+                    case "ischecked":
+                        node.IsChecked = bool.Parse(propValue);
+                        break;
+                    case "isselected":
+                        node.IsSelected = bool.Parse(propValue);
+                        break;
+                    case "groupname":
+                        node.GroupName = propValue;
+                        break;
+                    case "minvalue":
+                        node.MinValue = float.Parse(propValue);
+                        break;
+                    case "maxvalue":
+                        node.MaxValue = float.Parse(propValue);
+                        break;
+                    case "currentvalue":
+                        node.CurrentValue = float.Parse(propValue);
+                        break;
+                    // Event handlers
                     case "onclick":
                         node.OnClick = propValue;
                         break;
@@ -366,15 +519,21 @@ namespace Frontend.Desktop.UiDsl
                     case "onfocus":
                         node.OnFocus = propValue;
                         break;
+                    case "onchange":
+                        node.OnChange = propValue;
+                        break;
+                    case "onblur":
+                        node.OnBlur = propValue;
+                        break;
                     default:
-                        Console.WriteLine($"Warning: Unknown property '{propName}' with value '{propValue}'");
+                        LogToFile($"Warning: Unknown property '{propName}' with value '{propValue}'");
                         break;
                 }
-                Console.WriteLine($"Set property {propName}={propValue}");
+                LogToFile($"Set property {propName}={propValue}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error setting property {propName}={propValue}: {ex.Message}");
+                LogToFile($"Error setting property {propName}={propValue}: {ex.Message}");
             }
         }
 
@@ -383,12 +542,31 @@ namespace Frontend.Desktop.UiDsl
             if (string.IsNullOrWhiteSpace(colorStr))
                 return null;
                 
-            // Handle predefined colors
-            var colorProperty = typeof(SKColors).GetProperty(colorStr);
-            if (colorProperty != null)
+            // Handle predefined colors - case insensitive matching
+            foreach (var colorProp in typeof(SKColors).GetProperties())
             {
-                return (SKColor)colorProperty.GetValue(null);
+                if (string.Equals(colorProp.Name, colorStr, StringComparison.OrdinalIgnoreCase))
+                {
+                    return (SKColor)colorProp.GetValue(null);
+                }
             }
+            
+            // Special case hardcoded common colors
+            if (string.Equals(colorStr, "white", StringComparison.OrdinalIgnoreCase))
+                return SKColors.White;
+            if (string.Equals(colorStr, "black", StringComparison.OrdinalIgnoreCase))
+                return SKColors.Black;
+            if (string.Equals(colorStr, "red", StringComparison.OrdinalIgnoreCase))
+                return SKColors.Red;
+            if (string.Equals(colorStr, "green", StringComparison.OrdinalIgnoreCase))
+                return SKColors.Green;
+            if (string.Equals(colorStr, "blue", StringComparison.OrdinalIgnoreCase))
+                return SKColors.Blue;
+            if (string.Equals(colorStr, "yellow", StringComparison.OrdinalIgnoreCase))
+                return SKColors.Yellow;
+            if (string.Equals(colorStr, "gray", StringComparison.OrdinalIgnoreCase) || 
+                string.Equals(colorStr, "grey", StringComparison.OrdinalIgnoreCase))
+                return SKColors.Gray;
             
             // Handle hex colors (#RRGGBB or #AARRGGBB)
             if (colorStr.StartsWith("#"))
@@ -422,7 +600,7 @@ namespace Frontend.Desktop.UiDsl
             }
             
             // Default to black if we couldn't parse
-            Console.WriteLine($"Warning: Could not parse color '{colorStr}'");
+            LogToFile($"Warning: Could not parse color '{colorStr}', using black instead");
             return SKColors.Black; // Better default than null
         }
 
@@ -507,16 +685,16 @@ namespace Frontend.Desktop.UiDsl
         private void PrintNodeTree(SceneNode node, int indent)
         {
             var indentStr = new string(' ', indent * 2);
-            Console.WriteLine($"{indentStr}Node: {node.Type} Id: {node.Id ?? "none"} Pos: ({node.X}, {node.Y}) Size: {node.Width}x{node.Height}");
+            LogToFile($"{indentStr}Node: {node.Type} Id: {node.Id ?? "none"} Pos: ({node.X}, {node.Y}) Size: {node.Width}x{node.Height}");
             
             if (!string.IsNullOrEmpty(node.Text))
             {
-                Console.WriteLine($"{indentStr}  Text: \"{node.Text}\"");
+                LogToFile($"{indentStr}  Text: \"{node.Text}\"");
             }
             
             if (node.Children != null && node.Children.Count > 0)
             {
-                Console.WriteLine($"{indentStr}  Children: {node.Children.Count}");
+                LogToFile($"{indentStr}  Children: {node.Children.Count}");
                 foreach (var child in node.Children)
                 {
                     PrintNodeTree(child, indent + 1);

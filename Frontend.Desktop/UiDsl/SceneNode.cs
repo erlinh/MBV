@@ -11,7 +11,12 @@ namespace Frontend.Desktop.UiDsl
         Rectangle,
         Circle,
         Image,
-        Button
+        Button,
+        Input,
+        Checkbox,
+        RadioButton,
+        Slider,
+        DropDown
     }
 
     public class SceneNode
@@ -28,6 +33,7 @@ namespace Frontend.Desktop.UiDsl
         public SKColor? BackgroundColor { get; set; }
         public SKColor? BorderColor { get; set; }
         public float BorderWidth { get; set; }
+        public float BorderRadius { get; set; }
         public SKColor? FillColor { get; set; }
         public SKColor? TextColor { get; set; }
         public float FontSize { get; set; } = 16;
@@ -41,10 +47,22 @@ namespace Frontend.Desktop.UiDsl
         public float Margin { get; set; }
         public float Padding { get; set; }
 
+        // Interactive properties
+        public string Value { get; set; } = string.Empty;
+        public string Placeholder { get; set; } = string.Empty;
+        public bool IsChecked { get; set; } = false;
+        public bool IsSelected { get; set; } = false;
+        public string GroupName { get; set; } = string.Empty;
+        public float MinValue { get; set; } = 0;
+        public float MaxValue { get; set; } = 100;
+        public float CurrentValue { get; set; } = 0;
+
         // Event handlers (name of message to send)
         public string OnClick { get; set; } = string.Empty;
         public string OnHover { get; set; } = string.Empty;
         public string OnFocus { get; set; } = string.Empty;
+        public string OnChange { get; set; } = string.Empty;
+        public string OnBlur { get; set; } = string.Empty;
 
         // Node hierarchy
         public List<SceneNode> Children { get; set; } = new List<SceneNode>();
@@ -70,6 +88,7 @@ namespace Frontend.Desktop.UiDsl
                 BackgroundColor = this.BackgroundColor,
                 BorderColor = this.BorderColor,
                 BorderWidth = this.BorderWidth,
+                BorderRadius = this.BorderRadius,
                 FillColor = this.FillColor,
                 TextColor = this.TextColor,
                 FontSize = this.FontSize,
@@ -82,8 +101,76 @@ namespace Frontend.Desktop.UiDsl
                 Padding = this.Padding,
                 OnClick = this.OnClick,
                 OnHover = this.OnHover,
-                OnFocus = this.OnFocus
+                OnFocus = this.OnFocus,
+                OnChange = this.OnChange,
+                OnBlur = this.OnBlur,
+                Value = this.Value,
+                Placeholder = this.Placeholder,
+                IsChecked = this.IsChecked,
+                IsSelected = this.IsSelected,
+                GroupName = this.GroupName,
+                MinValue = this.MinValue,
+                MaxValue = this.MaxValue,
+                CurrentValue = this.CurrentValue
             };
+        }
+
+        public SceneNode? HitTest(float x, float y)
+        {
+            // If node is not visible, it can't be hit
+            if (!Visible)
+                return null;
+            
+            // Check if point is within this node's bounds
+            bool isInside = x >= X && x <= X + Width && 
+                            y >= Y && y <= Y + Height;
+            
+            if (!isInside)
+                return null;
+            
+            // Check children first (top-most node gets priority)
+            if (Children != null)
+            {
+                // Iterate in reverse order to check topmost nodes first
+                for (int i = Children.Count - 1; i >= 0; i--)
+                {
+                    // Adjust the hit test coordinates to be relative to the child's coordinate system
+                    var childHit = Children[i].HitTest(x - X, y - Y);
+                    if (childHit != null)
+                        return childHit;
+                }
+            }
+            
+            // If no children were hit, return this node if it's interactive
+            if (!string.IsNullOrEmpty(OnClick) || 
+                Type == NodeType.Button || 
+                Type == NodeType.Checkbox ||
+                Type == NodeType.Radio)
+                return this;
+            
+            return null;
+        }
+
+        public List<SceneNode> FindAllNodesOfType(NodeType type)
+        {
+            List<SceneNode> results = new List<SceneNode>();
+            
+            // Add this node if it matches
+            if (Type == type)
+            {
+                results.Add(this);
+            }
+            
+            // Search children
+            if (Children != null)
+            {
+                foreach (var child in Children)
+                {
+                    results.AddRange(child.FindAllNodesOfType(type));
+                }
+            }
+            
+            return results;
         }
     }
 } 

@@ -1,33 +1,44 @@
 <view width="800" height="600" backgroundColor="#F5F5F5">
-  {/* Header */}
-  <view x="0" y="0" width="800" height="60" backgroundColor="#3B82F6">
-    <text x="20" y="15" text="MBV Application" fontSize="24" textColor="White" />
-    <text x="650" y="20" text="User: Guest" fontSize="16" textColor="White" />
-  </view>
+  {/* Header Component */}
+  <include component="Header" width="800" title="MBV Application" userDisplay="User: Guest" />
   
-  {/* Sidebar Navigation */}
-  <view id="sidebar" x="0" y="60" width="200" height="540" backgroundColor="#F0F9FF" borderColor="#94A3B8" borderWidth="1">
-    <text x="20" y="20" text="Navigation" fontSize="18" textColor="#475569" />
-    
-    <box x="10" y="50" width="180" height="40" fill="#DBEAFE" border="#3B82F6" borderWidth="2" onClick="NavigateTo:home">
-      <text x="20" y="12" text="Home" fontSize="16" textColor="#1E40AF" />
-    </box>
-    
-    <box x="10" y="100" width="180" height="40" fill="#E0F2FE" border="#38BDF8" borderWidth="0" onClick="NavigateTo:notes">
-      <text x="20" y="12" text="Notes" fontSize="16" textColor="#0369A1" />
-    </box>
-    
-    <box x="10" y="150" width="180" height="40" fill="#E0F2FE" border="#38BDF8" borderWidth="0" onClick="NavigateTo:settings">
-      <text x="20" y="12" text="Settings" fontSize="16" textColor="#0369A1" />
-    </box>
-  </view>
+  {/* Sidebar Component with Navigation Items */}
+  <include component="Sidebar" x="0" y="60" width="200" height="540" backgroundColor="#F0F9FF" borderColor="#94A3B8" borderWidth="1">
+    <include component="NavItem" id="nav-home" x="10" y="50" width="180" text="Home" isActive="true" onClick="NavigateTo:home" />
+    <include component="NavItem" id="nav-notes" x="10" y="100" width="180" text="Notes" isActive="false" onClick="NavigateTo:notes" />
+    <include component="NavItem" id="nav-settings" x="10" y="150" width="180" text="Settings" isActive="false" onClick="NavigateTo:settings" />
+    <include component="NavItem" id="nav-profile" x="10" y="200" width="180" text="Profile" isActive="false" onClick="NavigateTo:profile" />
+  </include>
   
   {/* Main Content Area */}
-  <view x="200" y="60" width="600" height="540">
-    <text x="20" y="30" text="Welcome to MBV" fontSize="32" textColor="#334155" />
-    <text x="20" y="90" text="This is a sample application built with Message → Backend → View architecture." fontSize="16" textColor="#64748B" />
-    <box x="20" y="140" width="200" height="50" fill="#3B82F6" border="#1E40AF" borderWidth="2" onClick="ShowMessage:Welcome to MBV!">
-      <text x="40" y="15" text="Get Started" fontSize="18" textColor="White" />
-    </box>
+  <view id="content-area" x="220" y="80" width="560" height="500" backgroundColor="#FFFFFF" borderColor="#E2E8F0" borderWidth="1" borderRadius="8">
+    <text x="30" y="30" text="Welcome to MBV" fontSize="24" textColor="#1E40AF" />
+    
+    <text x="30" y="80" text="This is a sample application built with Message → Backend → View architecture." fontSize="14" textColor="#64748B" />
+    
+    {/* Sample Form */}
+    <include component="Card" id="form-card" x="30" y="150" width="500" height="320" title="Sample Form">
+      <view x="0" y="0" width="500" height="320">
+        <text x="20" y="20" text="Sample Form" fontSize="18" textColor="#334155" />
+      
+        <include component="Label" id="name-label" x="20" y="60" text="Name:" />
+        <include component="Input" id="name-input" x="20" y="80" width="460" value="John Doe" placeholder="Enter your name" />
+        
+        <include component="Label" id="email-label" x="20" y="130" text="Email:" />
+        <include component="Input" id="email-input" x="20" y="150" width="460" value="john@example.com" placeholder="Enter your email" />
+        
+        <include component="Checkbox" id="subscribe-checkbox" x="20" y="200" text="Subscribe to newsletter" isChecked="false" />
+        
+        <view x="20" y="230" width="460" height="30">
+          <text x="0" y="15" text="Preferred contact method:" fontSize="14" textColor="#64748B" />
+        </view>
+        
+        <include component="RadioButton" id="contact-email" x="20" y="250" text="Email" isSelected="true" groupName="contact-method" />
+        <include component="RadioButton" id="contact-phone" x="160" y="250" text="Phone" isSelected="false" groupName="contact-method" />
+        <include component="RadioButton" id="contact-mail" x="300" y="250" text="Mail" isSelected="false" groupName="contact-method" />
+        
+        <include component="Button" id="submit-button" x="380" y="280" width="100" height="40" text="Submit Form" backgroundColor="#3B82F6" textColor="#FFFFFF" />
+      </view>
+    </include>
   </view>
 </view> 

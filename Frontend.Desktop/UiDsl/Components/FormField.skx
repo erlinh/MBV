@@ -1,0 +1,6 @@
+<view x="{x || '0'}" y="{y || '0'}" width="{width}" height="70">
+  <text x="16" y="16" text="{label}" fontSize="14" textColor="#64748B" />
+  <box x="16" y="30" width="{width - 32}" height="40" fill="#FFFFFF" border="#CBD5E1" borderWidth="1" onClick="{onClick}">
+    <text x="12" y="12" text="{value || ''}" fontSize="16" textColor="#334155" />
+  </box>
+</view> 

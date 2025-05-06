@@ -1,6 +1,5 @@
-<view id="sidebar" x="0" y="{topY}" width="200" height="{height}" backgroundColor="#F0F9FF" borderColor="#94A3B8" borderWidth="1">
-  <text x="20" y="20" text="Navigation" fontSize="18" textColor="#475569" />
+<view id="sidebar" x="{x || '0'}" y="{y || '60'}" width="{width || '200'}" height="{height || '540'}" backgroundColor="{backgroundColor || '#F0F9FF'}" borderColor="{borderColor || '#94A3B8'}" borderWidth="{borderWidth || '1'}">
+  <text x="20" y="20" text="Navigation" fontSize="18" textColor="#475569"></text>
   
-  {/* Navigation items will be inserted dynamically here */}
-  {navItems}
+  <slot></slot>
 </view> 

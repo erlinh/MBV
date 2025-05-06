@@ -1,0 +1,6 @@
+<view x="{x}" y="{y}" id="{id || 'radio-button'}" width="{width || 150}" height="30">
+  <view x="0" y="0" width="20" height="20" borderRadius="10" borderWidth="2" borderColor="#3B82F6">
+    <circle x="10" y="10" radius="6" fillColor="{isSelected ? '#3B82F6' : '#FFFFFF'}"></circle>
+  </view>
+  <text x="30" y="15" text="{text}" fontSize="14" textColor="#1E293B"></text>
+</view> 

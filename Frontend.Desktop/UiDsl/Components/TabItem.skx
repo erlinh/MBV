@@ -1,0 +1,16 @@
+<box 
+  x="{x}" 
+  y="0" 
+  width="{width || '120'}" 
+  height="40" 
+  fill="{isActive ? '#FFFFFF' : '#F1F5F9'}" 
+  border="{isActive ? '#CBD5E1' : 'transparent'}"
+  borderWidth="{isActive ? '1' : '0'}"
+  onClick="{onClick}">
+  <text 
+    x="{width / 2 - 30}" 
+    y="12" 
+    text="{text}" 
+    fontSize="14" 
+    textColor="{isActive ? '#0F172A' : '#64748B'}" />
+</box> 

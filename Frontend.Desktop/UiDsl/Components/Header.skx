@@ -1,4 +1,4 @@
 <view x="0" y="0" width="{width}" height="60" backgroundColor="#3B82F6">
-  <text x="20" y="15" text="{title}" fontSize="24" textColor="White" />
-  <text x="{width - 150}" y="20" text="{userDisplay}" fontSize="16" textColor="White" />
+  <text x="20" y="15" text="{title}" fontSize="24" textColor="White"></text>
+  <text x="{width - 150}" y="20" text="{userDisplay}" fontSize="16" textColor="White"></text>
 </view> 

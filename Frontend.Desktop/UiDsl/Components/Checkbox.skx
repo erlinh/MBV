@@ -1,0 +1,10 @@
+<view id="{id}" x="{x || '0'}" y="{y || '0'}" width="{width || '200'}" height="{height || '24'}">
+  <box id="checkbox" x="0" y="0" width="24" height="24" 
+    fill="{isChecked ? '#3B82F6' : '#FFFFFF'}" 
+    border="{borderColor || '#CBD5E1'}" 
+    borderWidth="{borderWidth || '1'}" 
+    onClick="{onClick || 'ToggleCheckbox:' + id}">
+    <text x="5" y="4" text="{isChecked ? '✓' : ''}" fontSize="{fontSize || '16'}" textColor="#FFFFFF"></text>
+  </box>
+  <text x="32" y="5" text="{text}" fontSize="{fontSize || '14'}" textColor="{textColor || '#334155'}"></text>
+</view> 

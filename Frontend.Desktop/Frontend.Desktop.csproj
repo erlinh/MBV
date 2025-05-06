@@ -20,6 +20,12 @@
     <None Update="UiDsl\main.skx">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="UiDsl\tabs_example.skx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="UiDsl\TEMPLATING.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="UiDsl\Components\**\*.skx">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

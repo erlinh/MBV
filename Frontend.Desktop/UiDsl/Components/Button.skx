@@ -1,3 +1,21 @@
-<box id="{id}" x="{x}" y="{y}" width="{width}" height="{height}" fill="{fillColor}" border="{borderColor}" borderWidth="{borderWidth}" onClick="{onClick}">
-  <text x="{textX}" y="{textY}" text="{text}" fontSize="{fontSize}" textColor="{textColor}" />
-</box> 
+<view
+  id="{id || 'button'}"
+  x="{x || '0'}"
+  y="{y || '0'}"
+  width="{width || '120'}"
+  height="{height || '40'}"
+  backgroundColor="{backgroundColor || '#3B82F6'}"
+  borderRadius="{borderRadius || '4'}"
+  borderWidth="{borderWidth || '0'}"
+  borderColor="{borderColor || '#2563EB'}"
+  onClick="{onClick}"
+>
+  <text
+    x="{width / 2}"
+    y="{height / 2}"
+    text="{text || 'Button'}"
+    textColor="{textColor || '#FFFFFF'}"
+    fontSize="{fontSize || '14'}"
+    align="center"
+  ></text>
+</view> 
