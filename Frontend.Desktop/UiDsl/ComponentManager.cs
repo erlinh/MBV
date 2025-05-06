@@ -420,41 +420,6 @@ namespace Frontend.Desktop.UiDsl
                 commentIndex++;
                 return placeholder;
             });
-
-            // Handle onClick expressions with || operator - special case because they're commonly used
-            var onClickDefaultPattern = new Regex(@"\{onClick\s*\|\|\s*['""](EditField:|SelectRadio:|ToggleCheckbox:)([^}'""]*)['""]\s*\}");
-            template = onClickDefaultPattern.Replace(template, match => {
-                string action = match.Groups[1].Value;
-                string param = match.Groups[2].Value;
-                LogToFile($"Fixing onClick default: {action}{param}");
-                return $"{action}{param}";
-            });
-            
-            // Handle onClick with concatenation 
-            var onClickConcatPattern = new Regex(@"\{onClick\s*\|\|\s*['""](EditField:|SelectRadio:|ToggleCheckbox:)['""]\s*\+\s*([^}+]+)(?:\s*\+\s*['""]:['""]\s*\+\s*([^}+]+))?\}");
-            template = onClickConcatPattern.Replace(template, match => {
-                string action = match.Groups[1].Value;
-                string param1 = match.Groups[2].Value.Trim();
-                string param2 = match.Groups[3].Success ? ":" + match.Groups[3].Value.Trim() : "";
-                LogToFile($"Fixing onClick concat: {action}{param1}{param2}");
-                return $"{action}{param1}{param2}";
-            });
-
-            // Fix common value expressions
-            var valueDefaultPattern = new Regex(@"\{value\s*\|\|\s*placeholder(?:\s*\|\|\s*['""](.*?)['""]+)?\}");
-            template = valueDefaultPattern.Replace(template, match => {
-                string defaultValue = match.Groups[1].Success ? match.Groups[1].Value : "";
-                LogToFile($"Fixing value default: {defaultValue}");
-                return defaultValue;
-            });
-
-            // Fix checkbox expressions
-            var checkboxPattern = new Regex(@"\{isChecked\s*\?\s*['""](.*?)['""]\s*:\s*['""](.*?)['""]\s*\}");
-            template = checkboxPattern.Replace(template, match => {
-                // Default to empty since this is usually for display
-                LogToFile($"Fixing checkbox expression");
-                return "";
-            });
             
             // Replace any {propName} placeholders that weren't substituted
             var placeholderPattern = new Regex(@"\{([^{}]*)\}");
@@ -469,8 +434,7 @@ namespace Frontend.Desktop.UiDsl
                     innerContent.Contains("*") || innerContent.Contains("/"))
                 {
                     LogToFile($"Unresolved expression: {expression}");
-                    // For most expressions, empty string is safer than keeping the unresolved expression
-                    return ""; 
+                    return ""; // Remove unresolved expressions
                 }
                 
                 // Basic property placeholder

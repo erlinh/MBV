@@ -1,6 +1,9 @@
-<view x="{x}" y="{y}" id="{id || 'radio-button'}" width="{width || 150}" height="30">
-  <view x="0" y="0" width="20" height="20" borderRadius="10" borderWidth="2" borderColor="#3B82F6">
-    <circle x="10" y="10" radius="6" fillColor="{isSelected ? '#3B82F6' : '#FFFFFF'}"></circle>
-  </view>
-  <text x="30" y="15" text="{text}" fontSize="14" textColor="#1E293B"></text>
+<view id="{id}" x="{x || '0'}" y="{y || '0'}" width="{width || '200'}" height="{height || '24'}">
+  <circle id="radio-outer" x="12" y="12" radius="12" 
+    fill="{isSelected ? '#3B82F6' : '#FFFFFF'}" 
+    border="{borderColor || '#CBD5E1'}" 
+    borderWidth="{borderWidth || '1'}" 
+    onClick="{onClick || 'SelectRadio:' + groupName + ':' + id}"></circle>
+  <circle id="radio-inner" x="12" y="12" radius="4" fill="#FFFFFF" visible="{isSelected}"></circle>
+  <text x="32" y="5" text="{text}" fontSize="{fontSize || '14'}" textColor="{textColor || '#334155'}" />
 </view> 

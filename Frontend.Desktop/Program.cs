@@ -493,7 +493,7 @@ namespace Frontend.Desktop
                     }
                     else if (sdlEvent.type == SDL.SDL_EventType.SDL_MOUSEBUTTONDOWN)
                     {
-                        HandleMouseDown(sdlEvent.button.x, sdlEvent.button.y);
+                        HandleMouseClick(sdlEvent.button.x, sdlEvent.button.y);
                     }
                     else if (sdlEvent.type == SDL.SDL_EventType.SDL_MOUSEMOTION)
                     {
@@ -547,111 +547,577 @@ namespace Frontend.Desktop
             SDL.SDL_RenderPresent(_renderer);
         }
 
-        static void HandleEvent(SceneNode? node, string eventType)
+        static void HandleMouseClick(int x, int y)
         {
-            if (node == null) return;
+            if (_rootNode == null) return;
             
-            string handler = string.Empty;
+            LogToFile(_eventLogFile, $"Mouse click at ({x}, {y})");
             
-            // Get the appropriate event handler based on event type
-            switch (eventType)
+            // Find the node at the click position
+            var clickedNode = HitTest(_rootNode, x, y);
+            if (clickedNode != null)
             {
-                case "click":
-                    handler = node.OnClick;
-                    break;
-                case "hover":
-                    handler = node.OnHover;
-                    break;
-                case "focus":
-                    handler = node.OnFocus;
-                    break;
-                case "change":
-                    handler = node.OnChange;
-                    break;
-                case "blur":
-                    handler = node.OnBlur;
-                    break;
+                // Process the OnClick action
+                string onClickAction = clickedNode.OnClick;
+                LogToFile(_eventLogFile, $"Node hit: {clickedNode.Type} {clickedNode.Id ?? "unknown"} with OnClick: {onClickAction ?? "none"}");
+                
+                if (!string.IsNullOrEmpty(onClickAction))
+                {
+                    ProcessAction(onClickAction);
+                }
+                
+                Console.WriteLine($"Clicked: {clickedNode.Type} at ({x}, {y}) with action: {onClickAction}");
+            }
+            else
+            {
+                LogToFile(_eventLogFile, $"No node found at: {x}, {y}");
+                Console.WriteLine($"No node found at: {x}, {y}");
+            }
+        }
+        
+        static UiDsl.SceneNode? HitTest(UiDsl.SceneNode node, int x, int y, SKPoint parentPosition = default)
+        {
+            // Calculate absolute position
+            var position = new SKPoint(
+                parentPosition.X + node.X,
+                parentPosition.Y + node.Y
+            );
+            
+            // Check if point is within this node's bounds
+            bool isInside = x >= position.X && 
+                            x <= position.X + node.Width && 
+                            y >= position.Y && 
+                            y <= position.Y + node.Height;
+            
+            if (!isInside) return null;
+            
+            // Check children first (top-most node gets priority)
+            if (node.Children != null)
+            {
+                // Iterate in reverse order to check topmost nodes first
+                for (int i = node.Children.Count - 1; i >= 0; i--)
+                {
+                    var childHit = HitTest(node.Children[i], x, y, position);
+                    if (childHit != null)
+                        return childHit;
+                }
             }
             
-            // If no handler is defined, bubble up to parent
-            if (string.IsNullOrEmpty(handler) && node.Parent != null)
+            // If no children were hit, return this node if it has an onclick action
+            if (!string.IsNullOrEmpty(node.OnClick) || node.Type == UiDsl.NodeType.Button)
+                return node;
+                
+            return null;
+        }
+        
+        static void ProcessAction(string action)
+        {
+            LogToFile(_eventLogFile, $"Processing action: {action}");
+            
+            // First check if we have a custom handler registered
+            if (_actionHandlers.TryGetValue(action, out var handler))
             {
-                HandleEvent(node.Parent, eventType);
+                LogToFile(_eventLogFile, $"Found custom handler for action: {action}");
+                handler();
                 return;
             }
             
-            if (string.IsNullOrEmpty(handler)) return;
+            // Parse action format: ActionName:Param
+            string[] parts = action.Split(':', 2);
+            string actionName = parts[0];
+            string param = parts.Length > 1 ? parts[1] : string.Empty;
             
-            LogToFile($"Handling {eventType} event: {handler} for node {node.Id}");
+            LogToFile(_eventLogFile, $"Action name: {actionName}, parameter: {param}");
             
-            // Parse the action and parameters
-            string action = handler;
-            string[] parameters = Array.Empty<string>();
+            Console.WriteLine($"Processing action: {actionName} with param: {param}");
             
-            if (handler.Contains(':'))
+            switch (actionName)
             {
-                var parts = handler.Split(':', 2);
-                action = parts[0];
-                parameters = parts[1].Split(':');
-            }
-            
-            switch (action.ToLower())
-            {
-                case "navigateto":
-                    string screen = parameters.Length > 0 ? parameters[0] : "home";
-                    LogToFile($"Navigation to: {screen}");
+                case "NavigateTo":
+                    _appStore.NavigateTo(param);
+                    // Update the UI to reflect navigation
+                    UpdateUiForNavigation(param);
+                    Console.WriteLine($"Navigating to: {param}");
                     break;
                     
-                case "selectradio":
-                    if (parameters.Length >= 2)
+                case "ShowMessage":
+                    ShowMessageBox(param, "MBV Information");
+                    break;
+                    
+                case "ToggleSidebar":
+                    _appStore.ToggleSidebar();
+                    // Toggle sidebar visibility in the UI
+                    if (_rootNode != null)
                     {
-                        string groupName = parameters[0];
-                        string selectedId = parameters[1];
-                        LogToFile($"Selecting radio button: {selectedId} in group {groupName}");
-                        
-                        // Find all radio buttons in the same group and update their states
-                        if (_rootNode != null)
+                        var sidebar = FindNodeById(_rootNode, "sidebar");
+                        if (sidebar != null)
                         {
-                            // First deselect all in the group
-                            foreach (var radioNode in _rootNode.FindAllNodesOfType(NodeType.Radio))
-                            {
-                                if (radioNode.GroupName == groupName)
-                                {
-                                    radioNode.IsSelected = (radioNode.Id == selectedId);
-                                }
-                            }
+                            sidebar.Visible = _appStore.IsSidebarOpen;
                         }
                     }
                     break;
                     
-                case "togglecheckbox":
-                    LogToFile($"Toggling checkbox: {node.Id}");
-                    node.IsChecked = !node.IsChecked;
+                case "EditField":
+                    // Open a dialog to edit the field content
+                    if (string.IsNullOrEmpty(param))
+                        break;
+                        
+                    var fieldNode = FindNodeById(_rootNode, param);
+                    if (fieldNode != null)
+                    {
+                        string currentValue = fieldNode.Value;
+                        string newValue = ShowInputDialog($"Edit {param}", "Enter new value", currentValue);
+                        
+                        if (!string.IsNullOrEmpty(newValue) && newValue != currentValue)
+                        {
+                            fieldNode.Value = newValue;
+                            Console.WriteLine($"Updated field {param} with value: {newValue}");
+                            
+                            // Trigger change handler if available
+                            if (!string.IsNullOrEmpty(fieldNode.OnChange))
+                            {
+                                ProcessAction(fieldNode.OnChange + ":" + newValue);
+                            }
+                            
+                            _sceneNeedsUpdate = true;
+                        }
+                    }
                     break;
                     
-                case "editfield":
-                    string fieldId = parameters.Length > 0 ? parameters[0] : node.Id;
-                    LogToFile($"Edit field: {fieldId}");
-                    // Here you would open an editor for the field
+                case "ToggleCheckbox":
+                    // Toggle the checked state of a checkbox
+                    if (string.IsNullOrEmpty(param))
+                        break;
+                        
+                    var checkboxNode = FindNodeById(_rootNode, param);
+                    if (checkboxNode != null)
+                    {
+                        checkboxNode.IsChecked = !checkboxNode.IsChecked;
+                        Console.WriteLine($"Toggled checkbox {param}: {checkboxNode.IsChecked}");
+                        
+                        // Trigger change handler if available
+                        if (!string.IsNullOrEmpty(checkboxNode.OnChange))
+                        {
+                            ProcessAction(checkboxNode.OnChange + ":" + checkboxNode.IsChecked);
+                        }
+                        
+                        _sceneNeedsUpdate = true;
+                    }
+                    break;
+                    
+                case "SelectRadio":
+                    // Select a radio button in a group
+                    string[] radioParams = param.Split(':', 2);
+                    if (radioParams.Length < 2)
+                        break;
+                        
+                    string groupName = radioParams[0];
+                    string radioId = radioParams[1];
+                    
+                    // First unselect all other radio buttons in the same group
+                    if (_rootNode != null)
+                    {
+                        // Find all radio buttons in this group and unselect them
+                        var radioNodes = FindNodesByGroupName(_rootNode, groupName);
+                        foreach (var radio in radioNodes)
+                        {
+                            radio.IsSelected = (radio.Id == radioId);
+                            
+                            // Trigger change handler if this is the selected one
+                            if (radio.Id == radioId && !string.IsNullOrEmpty(radio.OnChange))
+                            {
+                                ProcessAction(radio.OnChange + ":" + radio.Id);
+                            }
+                        }
+                        
+                        _sceneNeedsUpdate = true;
+                    }
+                    break;
+                
+                case "CloseMessage":
+                    // Find and remove message overlay
+                    if (_rootNode != null)
+                    {
+                        var overlay = FindNodeById(_rootNode, "message_overlay");
+                        if (overlay != null && _rootNode.Children.Contains(overlay))
+                        {
+                            _rootNode.Children.Remove(overlay);
+                        }
+                    }
                     break;
                     
                 default:
-                    LogToFile($"Unknown action: {action}");
+                    Console.WriteLine($"Unknown action: {actionName}");
                     break;
+            }
+            
+            _sceneNeedsUpdate = true;
+        }
+        
+        static void ShowMessageBox(string message, string title)
+        {
+            if (_rootNode == null) return;
+            
+            // Create overlay to block background
+            var overlay = new UiDsl.SceneNode
+            {
+                Id = "message_overlay",
+                Type = UiDsl.NodeType.Container,
+                X = 0,
+                Y = 0,
+                Width = Width,
+                Height = Height,
+                BackgroundColor = new SKColor(0, 0, 0, 100) // Semi-transparent black
+            };
+            
+            // Create message box
+            var messageBox = new UiDsl.SceneNode
+            {
+                Type = UiDsl.NodeType.Container,
+                X = Width / 2 - 200,
+                Y = Height / 2 - 100,
+                Width = 400,
+                Height = 200,
+                BackgroundColor = SKColors.White,
+                BorderColor = new SKColor(203, 213, 225),
+                BorderWidth = 1,
+                BorderRadius = 8
+            };
+            
+            // Add title
+            var titleNode = new UiDsl.SceneNode
+            {
+                Type = UiDsl.NodeType.Text,
+                X = 20,
+                Y = 20,
+                Text = title,
+                FontSize = 18,
+                TextColor = new SKColor(51, 65, 85)
+            };
+            messageBox.AddChild(titleNode);
+            
+            // Add message
+            var messageNode = new UiDsl.SceneNode
+            {
+                Type = UiDsl.NodeType.Text,
+                X = 20,
+                Y = 60,
+                Width = 360,
+                Text = message,
+                FontSize = 14,
+                TextColor = new SKColor(71, 85, 105)
+            };
+            messageBox.AddChild(messageNode);
+            
+            // Add OK button
+            var okButton = new UiDsl.SceneNode
+            {
+                Type = UiDsl.NodeType.Rectangle,
+                X = 150,
+                Y = 140,
+                Width = 100,
+                Height = 40,
+                FillColor = new SKColor(59, 130, 246),
+                BorderRadius = 4,
+                OnClick = "CloseMessage"
+            };
+            
+            var okText = new UiDsl.SceneNode
+            {
+                Type = UiDsl.NodeType.Text,
+                X = 40,
+                Y = 12,
+                Text = "OK",
+                FontSize = 14,
+                TextColor = SKColors.White
+            };
+            okButton.AddChild(okText);
+            messageBox.AddChild(okButton);
+            
+            // Add message box to overlay
+            overlay.AddChild(messageBox);
+            
+            // Add overlay to root
+            _rootNode.AddChild(overlay);
+            
+            _sceneNeedsUpdate = true;
+        }
+        
+        static string ShowInputDialog(string title, string prompt, string defaultValue = "")
+        {
+            if (_rootNode == null) return defaultValue;
+            
+            // Create an input dialog similar to a message box but with a text field
+            // In a real app, this would be an actual input dialog, but for this example
+            // we'll simulate it with a console prompt
+            
+            Console.WriteLine();
+            Console.WriteLine($"=== {title} ===");
+            Console.WriteLine(prompt);
+            Console.Write($"[{defaultValue}]: ");
+            string? input = Console.ReadLine();
+            
+            // Use default if nothing entered
+            if (string.IsNullOrEmpty(input))
+                return defaultValue;
+                
+            return input;
+        }
+        
+        static List<UiDsl.SceneNode> FindNodesByGroupName(UiDsl.SceneNode rootNode, string groupName)
+        {
+            List<UiDsl.SceneNode> results = new List<UiDsl.SceneNode>();
+            
+            void Search(UiDsl.SceneNode node)
+            {
+                // Check if this node matches
+                if (node.GroupName == groupName)
+                {
+                    results.Add(node);
+                }
+                
+                // Search children
+                if (node.Children != null)
+                {
+                    foreach (var child in node.Children)
+                    {
+                        Search(child);
+                    }
+                }
+            }
+            
+            Search(rootNode);
+            return results;
+        }
+        
+        static void ShowNotification(string message)
+        {
+            // Create a notification that automatically disappears
+            if (_rootNode != null)
+            {
+                var notif = new UiDsl.SceneNode
+                {
+                    Id = "notification",
+                    Type = UiDsl.NodeType.Container,
+                    X = Width - 320,
+                    Y = 70,
+                    Width = 300,
+                    Height = 60,
+                    BackgroundColor = new SKColor(34, 197, 94), // Green
+                    BorderColor = new SKColor(21, 128, 61),
+                    BorderWidth = 1
+                };
+                
+                var notifText = new UiDsl.SceneNode
+                {
+                    Type = UiDsl.NodeType.Text,
+                    X = 15,
+                    Y = 20,
+                    Text = message,
+                    FontSize = 16,
+                    TextColor = SKColors.White
+                };
+                notif.AddChild(notifText);
+                
+                _rootNode.AddChild(notif);
+                
+                // Set up a timer to remove the notification
+                Task.Run(async () =>
+                {
+                    await Task.Delay(3000); // 3 seconds
+                    var existingNotif = FindNodeById(_rootNode, "notification");
+                    if (existingNotif != null && _rootNode.Children.Contains(existingNotif))
+                    {
+                        _rootNode.Children.Remove(existingNotif);
+                        _sceneNeedsUpdate = true;
+                    }
+                });
+            }
+        }
+        
+        static void UpdateUiForNavigation(string view)
+        {
+            if (_rootNode == null) return;
+            
+            // Find the main content container
+            var contentContainer = _rootNode.Children.Find(n => 
+                n.Type == UiDsl.NodeType.Container && 
+                n.X >= 200 && n.Y >= 60 && 
+                n.Width >= 500);
+                
+            if (contentContainer == null) return;
+            
+            // Replace the entire content container instead of just inner content
+            // to ensure all previous elements are removed
+            contentContainer.Children.Clear();
+            
+            // Create fresh inner container
+            var innerContainer = new UiDsl.SceneNode
+            {
+                Type = UiDsl.NodeType.Container,
+                X = 20,
+                Y = 20,
+                Width = 560,
+                Height = 500
+            };
+            contentContainer.AddChild(innerContainer);
+            
+            // Add a title based on the view
+            var titleText = view switch
+            {
+                "home" => "Welcome to MBV",
+                "notes" => "Notes Page",
+                "settings" => "Settings Page",
+                _ => $"View: {view}"
+            };
+            
+            var titleNode = new UiDsl.SceneNode
+            {
+                Type = UiDsl.NodeType.Text,
+                X = 0,
+                Y = 20,
+                Text = titleText,
+                FontSize = 32,
+                TextColor = new SKColor(51, 65, 85)
+            };
+            innerContainer.AddChild(titleNode);
+            
+            // Add some content
+            var contentText = view switch
+            {
+                "home" => "Welcome to the home page of the MBV application!",
+                "notes" => "This is where your notes would be displayed.",
+                "settings" => "Here you can configure application settings.",
+                _ => $"Content for '{view}' view"
+            };
+            
+            var contentNode = new UiDsl.SceneNode
+            {
+                Type = UiDsl.NodeType.Text,
+                X = 0,
+                Y = 80,
+                Text = contentText,
+                FontSize = 16,
+                TextColor = new SKColor(100, 116, 139)
+            };
+            innerContainer.AddChild(contentNode);
+            
+            // Add architecture description text for home page
+            if (view == "home")
+            {
+                var descriptionNode = new UiDsl.SceneNode
+                {
+                    Type = UiDsl.NodeType.Text,
+                    X = 0,
+                    Y = 110,
+                    Text = "This is a sample application built with Message → Backend → View architecture.",
+                    FontSize = 16,
+                    TextColor = new SKColor(100, 116, 139)
+                };
+                innerContainer.AddChild(descriptionNode);
+            }
+            
+            // Add a button
+            var button = new UiDsl.SceneNode
+            {
+                Type = UiDsl.NodeType.Rectangle,
+                X = 0,
+                Y = 160,
+                Width = 200,
+                Height = 50,
+                FillColor = new SKColor(59, 130, 246),
+                BorderColor = new SKColor(29, 78, 216),
+                BorderWidth = 2,
+                OnClick = $"ShowMessage:{titleText} button clicked!"
+            };
+            
+            var buttonText = new UiDsl.SceneNode
+            {
+                Type = UiDsl.NodeType.Text,
+                X = 40,
+                Y = 15,
+                Text = view == "home" ? "Get Started" : "Click Me",
+                FontSize = 18,
+                TextColor = SKColors.White
+            };
+            button.AddChild(buttonText);
+            
+            innerContainer.AddChild(button);
+            
+            // Highlight the selected navigation item
+            HighlightSelectedNavItem(view);
+            
+            _sceneNeedsUpdate = true;
+        }
+        
+        static void HighlightSelectedNavItem(string view)
+        {
+            if (_rootNode == null) return;
+            
+            // Find the sidebar container
+            var sidebar = _rootNode.Children.Find(n => 
+                n.Type == UiDsl.NodeType.Container && 
+                n.X == 0 && n.Y >= 60 && 
+                n.Width <= 200);
+                
+            if (sidebar == null) return;
+            
+            // Find all navigation buttons
+            foreach (var child in sidebar.Children)
+            {
+                if (child.Type == UiDsl.NodeType.Rectangle)
+                {
+                    // Check if this button is for the current view
+                    bool isSelected = false;
+                    if (child.OnClick.StartsWith("NavigateTo:"))
+                    {
+                        string buttonView = child.OnClick.Split(':')[1];
+                        isSelected = buttonView.Equals(view, StringComparison.OrdinalIgnoreCase);
+                    }
+                    
+                    // Update appearance based on selection state
+                    if (isSelected)
+                    {
+                        child.FillColor = new SKColor(219, 234, 254); // Light blue
+                        child.BorderColor = new SKColor(59, 130, 246); // Blue
+                        child.BorderWidth = 2;
+                    }
+                    else
+                    {
+                        child.FillColor = new SKColor(224, 242, 254); // Very light blue
+                        child.BorderColor = new SKColor(56, 189, 248); // Light blue
+                        child.BorderWidth = 0;
+                    }
+                }
             }
         }
 
-        static void HandleMouseDown(int x, int y)
+        // Helper method to find a node by ID
+        static UiDsl.SceneNode? FindNodeById(UiDsl.SceneNode root, string id)
         {
-            var node = _rootNode?.HitTest(x, y);
-            LogToFile($"Mouse down at ({x}, {y}), hit: {node?.Id ?? "none"}");
-            
-            if (node != null)
+            if (root.Id == id)
+                return root;
+                
+            if (root.Children != null)
             {
-                HandleEvent(node, "click");
-                _hoveredNode = node;
-                _sceneNeedsUpdate = true;
+                foreach (var child in root.Children)
+                {
+                    var result = FindNodeById(child, id);
+                    if (result != null)
+                        return result;
+                }
             }
+            
+            return null;
+        }
+
+        static void Cleanup()
+        {
+            _surface?.Dispose();
+            SDL.SDL_DestroyTexture(_texture);
+            SDL.SDL_DestroyRenderer(_renderer);
+            SDL.SDL_DestroyWindow(_window);
+            SDL.SDL_Quit();
         }
 
         static void HandleMouseMove(int x, int y)
@@ -659,7 +1125,7 @@ namespace Frontend.Desktop
             if (_rootNode == null) return;
             
             // Find the node at the cursor position
-            var hoveredNode = _rootNode.HitTest(x, y);
+            var hoveredNode = HitTest(_rootNode, x, y);
             
             // Only update UI if the hovered node changed
             if (hoveredNode != _hoveredNode)
@@ -682,7 +1148,7 @@ namespace Frontend.Desktop
                     // Trigger hover action if any
                     if (!string.IsNullOrEmpty(_hoveredNode.OnHover))
                     {
-                        HandleEvent(_hoveredNode, "hover");
+                        ProcessAction(_hoveredNode.OnHover);
                     }
                     
                     Console.WriteLine($"Hover enter: {_hoveredNode.Type}");
@@ -706,15 +1172,6 @@ namespace Frontend.Desktop
                 // Update the UI
                 _sceneNeedsUpdate = true;
             }
-        }
-
-        static void Cleanup()
-        {
-            _surface?.Dispose();
-            SDL.SDL_DestroyTexture(_texture);
-            SDL.SDL_DestroyRenderer(_renderer);
-            SDL.SDL_DestroyWindow(_window);
-            SDL.SDL_Quit();
         }
     }
 }

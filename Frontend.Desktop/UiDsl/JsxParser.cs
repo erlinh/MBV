@@ -364,59 +364,6 @@ namespace Frontend.Desktop.UiDsl
         {
             try
             {
-                // Handle empty values properly
-                if (string.IsNullOrWhiteSpace(propValue))
-                {
-                    LogToFile($"Empty value for property {propName}, using appropriate default");
-                    
-                    // For numeric properties, use sensible defaults
-                    switch (propName.ToLower())
-                    {
-                        case "x":
-                        case "y":
-                            // Default position to 0
-                            if (propName.ToLower() == "x") node.X = 0;
-                            if (propName.ToLower() == "y") node.Y = 0;
-                            break;
-                            
-                        case "width":
-                            // Default width based on type
-                            node.Width = node.Type == NodeType.Text ? 100 : 
-                                       node.Type == NodeType.Button ? 150 : 200;
-                            break;
-                            
-                        case "height":
-                            // Default height based on type
-                            node.Height = node.Type == NodeType.Text ? 30 : 
-                                        node.Type == NodeType.Button ? 40 : 30;
-                            break;
-                            
-                        case "fontsize":
-                        case "size":
-                            // Default font size
-                            node.FontSize = 14;
-                            break;
-                            
-                        case "borderwidth":
-                            // Default border width
-                            node.BorderWidth = 1;
-                            break;
-                            
-                        case "borderradius":
-                        case "radius":
-                            // Default radius
-                            node.BorderRadius = 5;
-                            break;
-                            
-                        // For other properties, just record we're skipping
-                        default:
-                            LogToFile($"Skipping empty property {propName}");
-                            break;
-                    }
-                    
-                    return;
-                }
-                
                 switch (propName.ToLower())
                 {
                     case "id":
@@ -542,31 +489,12 @@ namespace Frontend.Desktop.UiDsl
             if (string.IsNullOrWhiteSpace(colorStr))
                 return null;
                 
-            // Handle predefined colors - case insensitive matching
-            foreach (var colorProp in typeof(SKColors).GetProperties())
+            // Handle predefined colors
+            var colorProperty = typeof(SKColors).GetProperty(colorStr);
+            if (colorProperty != null)
             {
-                if (string.Equals(colorProp.Name, colorStr, StringComparison.OrdinalIgnoreCase))
-                {
-                    return (SKColor)colorProp.GetValue(null);
-                }
+                return (SKColor)colorProperty.GetValue(null);
             }
-            
-            // Special case hardcoded common colors
-            if (string.Equals(colorStr, "white", StringComparison.OrdinalIgnoreCase))
-                return SKColors.White;
-            if (string.Equals(colorStr, "black", StringComparison.OrdinalIgnoreCase))
-                return SKColors.Black;
-            if (string.Equals(colorStr, "red", StringComparison.OrdinalIgnoreCase))
-                return SKColors.Red;
-            if (string.Equals(colorStr, "green", StringComparison.OrdinalIgnoreCase))
-                return SKColors.Green;
-            if (string.Equals(colorStr, "blue", StringComparison.OrdinalIgnoreCase))
-                return SKColors.Blue;
-            if (string.Equals(colorStr, "yellow", StringComparison.OrdinalIgnoreCase))
-                return SKColors.Yellow;
-            if (string.Equals(colorStr, "gray", StringComparison.OrdinalIgnoreCase) || 
-                string.Equals(colorStr, "grey", StringComparison.OrdinalIgnoreCase))
-                return SKColors.Gray;
             
             // Handle hex colors (#RRGGBB or #AARRGGBB)
             if (colorStr.StartsWith("#"))
@@ -600,7 +528,7 @@ namespace Frontend.Desktop.UiDsl
             }
             
             // Default to black if we couldn't parse
-            LogToFile($"Warning: Could not parse color '{colorStr}', using black instead");
+            LogToFile($"Warning: Could not parse color '{colorStr}'");
             return SKColors.Black; // Better default than null
         }
 
