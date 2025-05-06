@@ -1,0 +1,3 @@
+<box id="{id}" x="{x}" y="{y}" width="{width}" height="{height}" fill="{fillColor}" border="{borderColor}" borderWidth="{borderWidth}" onClick="{onClick}">
+  <text x="{textX}" y="{textY}" text="{text}" fontSize="{fontSize}" textColor="{textColor}" />
+</box> 

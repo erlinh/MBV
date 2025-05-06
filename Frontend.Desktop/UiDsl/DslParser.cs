@@ -10,10 +10,19 @@ namespace Frontend.Desktop.UiDsl
     public class DslParser
     {
         private readonly JsxParser _jsxParser;
+        private ComponentManager? _componentManager;
 
         public DslParser()
         {
             _jsxParser = new JsxParser();
+        }
+
+        /// <summary>
+        /// Initialize component manager with the path to component files
+        /// </summary>
+        public void InitComponentManager(string componentPath)
+        {
+            _componentManager = new ComponentManager(componentPath, this);
         }
 
         /// <summary>
@@ -35,27 +44,44 @@ namespace Frontend.Desktop.UiDsl
         {
             try
             {
+                // Process component includes if component manager is initialized
+                if (_componentManager != null)
+                {
+                    Console.WriteLine("Processing components before parsing JSX...");
+                    content = _componentManager.ProcessIncludes(content);
+                    Console.WriteLine("Component processing completed");
+                }
+                else
+                {
+                    Console.WriteLine("No component manager initialized, skipping component processing");
+                }
+
                 // Support multiple formats: JSON, JSX, and simplified DSL
                 string trimmedContent = content.TrimStart();
                 
                 if (trimmedContent.StartsWith("<"))
                 {
                     // JSX format
+                    Console.WriteLine("Parsing JSX string");
                     return _jsxParser.ParseString(content);
                 }
                 else if (trimmedContent.StartsWith("{"))
                 {
                     // JSON format
+                    Console.WriteLine("Parsing JSON format");
                     return ParseJson(content);
                 }
                 else
                 {
                     // Simplified DSL format
+                    Console.WriteLine("Parsing simplified DSL format");
                     return ParseSimplifiedDsl(content);
                 }
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"ERROR in ParseString: {ex.Message}");
+                Console.WriteLine(ex.StackTrace);
                 throw new FormatException($"Failed to parse UI DSL: {ex.Message}", ex);
             }
         }

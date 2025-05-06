@@ -1,0 +1,6 @@
+<view id="sidebar" x="0" y="{topY}" width="200" height="{height}" backgroundColor="#F0F9FF" borderColor="#94A3B8" borderWidth="1">
+  <text x="20" y="20" text="Navigation" fontSize="18" textColor="#475569" />
+  
+  {/* Navigation items will be inserted dynamically here */}
+  {navItems}
+</view> 

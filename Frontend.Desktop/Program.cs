@@ -138,6 +138,42 @@ namespace Frontend.Desktop
             {
                 // Try to load from file
                 string dslPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UiDsl", "main.skx");
+                string componentPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UiDsl", "Components");
+                
+                Console.WriteLine($"Looking for UI file at: {dslPath}");
+                Console.WriteLine($"Looking for components at: {componentPath}");
+                
+                // Ensure component directory exists
+                if (!Directory.Exists(componentPath))
+                {
+                    Console.WriteLine($"Component directory not found at: {componentPath}");
+                    // Try alternative path - source code location
+                    string srcComponentPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "UiDsl", "Components");
+                    if (Directory.Exists(srcComponentPath))
+                    {
+                        Console.WriteLine($"Found components in source directory: {srcComponentPath}");
+                        componentPath = srcComponentPath;
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Could not find components directory in source: {srcComponentPath}");
+                        // Create the directory if it doesn't exist
+                        try
+                        {
+                            Directory.CreateDirectory(componentPath);
+                            Console.WriteLine($"Created component directory at: {componentPath}");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Failed to create component directory: {ex.Message}");
+                        }
+                    }
+                }
+                
+                // Initialize the component manager with the components directory
+                Console.WriteLine($"Initializing component manager with path: {componentPath}");
+                _dslParser.InitComponentManager(componentPath);
+                
                 if (File.Exists(dslPath))
                 {
                     Console.WriteLine($"Loading UI from {dslPath}...");
@@ -156,10 +192,32 @@ namespace Frontend.Desktop
                 }
                 else
                 {
-                    // Create a default UI if file doesn't exist
-                    Console.WriteLine($"UI file not found at {dslPath}");
-                    _rootNode = CreateDefaultUi();
-                    Console.WriteLine("Using default UI");
+                    // Try to find main.skx in the source code directory
+                    string srcDslPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "UiDsl", "main.skx");
+                    Console.WriteLine($"UI file not found at {dslPath}, trying source path: {srcDslPath}");
+                    
+                    if (File.Exists(srcDslPath))
+                    {
+                        Console.WriteLine($"Found UI file in source: {srcDslPath}");
+                        try
+                        {
+                            _rootNode = _dslParser.ParseFile(srcDslPath);
+                            Console.WriteLine("UI loaded successfully from source");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error parsing source UI file: {ex.Message}");
+                            _rootNode = CreateDefaultUi();
+                            Console.WriteLine("Falling back to default UI");
+                        }
+                    }
+                    else
+                    {
+                        // Create a default UI if file doesn't exist
+                        Console.WriteLine($"UI file not found in source either, using default UI");
+                        _rootNode = CreateDefaultUi();
+                        Console.WriteLine("Using default UI");
+                    }
                 }
                 
                 _skRenderer.SetSceneGraph(_rootNode);
@@ -167,6 +225,7 @@ namespace Frontend.Desktop
             catch (Exception ex)
             {
                 Console.WriteLine($"Error loading UI: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
                 _rootNode = CreateDefaultUi();
                 _skRenderer.SetSceneGraph(_rootNode);
             }
