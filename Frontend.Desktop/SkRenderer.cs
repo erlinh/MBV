@@ -15,11 +15,13 @@ namespace Frontend.Desktop
         public SkRenderer(SKCanvas canvas)
         {
             _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
+            Console.WriteLine("SkRenderer initialized");
         }
 
         public void SetSceneGraph(UiDsl.SceneNode rootNode)
         {
             _rootNode = rootNode;
+            Console.WriteLine($"Scene graph set: {rootNode.Type} with {rootNode.Children?.Count ?? 0} children");
         }
         
         public void SetHoveredNode(UiDsl.SceneNode? hoveredNode)
@@ -30,20 +32,28 @@ namespace Frontend.Desktop
         public void Render()
         {
             if (_rootNode == null)
+            {
+                Console.WriteLine("Cannot render: root node is null");
                 return;
+            }
 
             // Clear the canvas
             _canvas.Clear(SKColors.White);
+            Console.WriteLine("Starting scene rendering");
 
             // Render the scene graph
             RenderNode(_rootNode, SKPoint.Empty);
 
             // Flush the canvas
             _canvas.Flush();
+            Console.WriteLine("Scene rendering complete");
         }
 
         private void RenderNode(UiDsl.SceneNode node, SKPoint parentPosition)
         {
+            if (!node.Visible)
+                return;
+                
             // Calculate absolute position
             var position = new SKPoint(
                 parentPosition.X + node.X,
@@ -53,6 +63,8 @@ namespace Frontend.Desktop
             // Check if this is the hovered node
             bool isHovered = _hoveredNode == node;
             bool isClickable = !string.IsNullOrEmpty(node.OnClick);
+            
+            Console.WriteLine($"Rendering {node.Type} at ({position.X}, {position.Y}) size: {node.Width}x{node.Height} id: {node.Id ?? "none"}");
             
             switch (node.Type)
             {
@@ -74,11 +86,15 @@ namespace Frontend.Desktop
                 case UiDsl.NodeType.Button:
                     RenderButton(node, position, isHovered, true);
                     break;
+                default:
+                    Console.WriteLine($"Warning: Unknown node type {node.Type}");
+                    break;
             }
 
             // Render children
-            if (node.Children != null)
+            if (node.Children != null && node.Children.Count > 0)
             {
+                Console.WriteLine($"Rendering {node.Children.Count} children of {node.Type} {node.Id ?? ""}");
                 foreach (var child in node.Children)
                 {
                     RenderNode(child, position);
@@ -135,7 +151,10 @@ namespace Frontend.Desktop
             using var paint = new SKPaint
             {
                 Color = node.TextColor ?? SKColors.Black,
-                IsAntialias = true
+                IsAntialias = true,
+                TextAlign = SKTextAlign.Left,
+                Typeface = SKTypeface.Default,
+                SubpixelText = true  // Enables subpixel rendering for smoother text
             };
             
             // If clickable, add underline for text
@@ -152,7 +171,16 @@ namespace Frontend.Desktop
                 }
             }
 
-            _canvas.DrawText(node.Text, position.X, position.Y + font.Size, SKTextAlign.Left, font, paint);
+            // Measure text metrics to calculate proper positioning
+            var textBounds = new SKRect();
+            paint.MeasureText(node.Text, ref textBounds);
+            
+            // Calculate proper Y position using text metrics
+            // Adjusting for baseline alignment to make text vertical spacing more consistent
+            float textYPosition = position.Y + font.Size + Math.Abs(textBounds.Top);
+            
+            // Draw the text at the proper position
+            _canvas.DrawText(node.Text, position.X, textYPosition, paint);
             
             // Draw underline for clickable text when hovered
             if (isClickable && isHovered)
@@ -167,11 +195,15 @@ namespace Frontend.Desktop
                 float textWidth = paint.MeasureText(node.Text);
                 _canvas.DrawLine(
                     position.X, 
-                    position.Y + font.Size + 2, 
+                    textYPosition + 2, 
                     position.X + textWidth, 
-                    position.Y + font.Size + 2, 
+                    textYPosition + 2, 
                     underlinePaint);
             }
+            
+            // For debugging text bounds
+            // using var debugPaint = new SKPaint { Color = SKColors.Red, Style = SKPaintStyle.Stroke, StrokeWidth = 1 };
+            // _canvas.DrawRect(position.X, position.Y, textBounds.Width, Math.Abs(textBounds.Top) + textBounds.Height, debugPaint);
         }
 
         private void RenderRectangle(UiDsl.SceneNode node, SKPoint position, bool isHovered, bool isClickable)

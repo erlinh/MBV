@@ -140,16 +140,29 @@ namespace Frontend.Desktop
                 string dslPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UiDsl", "main.skx");
                 if (File.Exists(dslPath))
                 {
-                    _rootNode = _dslParser.ParseFile(dslPath);
+                    Console.WriteLine($"Loading UI from {dslPath}...");
+                    try
+                    {
+                        _rootNode = _dslParser.ParseFile(dslPath);
+                        Console.WriteLine("UI loaded successfully");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error parsing UI file: {ex.Message}");
+                        Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                        _rootNode = CreateDefaultUi();
+                        Console.WriteLine("Falling back to default UI");
+                    }
                 }
                 else
                 {
                     // Create a default UI if file doesn't exist
+                    Console.WriteLine($"UI file not found at {dslPath}");
                     _rootNode = CreateDefaultUi();
+                    Console.WriteLine("Using default UI");
                 }
                 
                 _skRenderer.SetSceneGraph(_rootNode);
-                Console.WriteLine("UI loaded successfully");
             }
             catch (Exception ex)
             {
@@ -161,37 +174,184 @@ namespace Frontend.Desktop
 
         private static SceneNode CreateDefaultUi()
         {
-            // Create a minimal default UI
+            Console.WriteLine("Creating default UI");
+            
+            // Create a root container matching our JSX structure
             var root = new SceneNode
             {
                 Type = NodeType.Container,
                 Width = Width,
                 Height = Height,
-                BackgroundColor = new SKColor(240, 240, 240)
+                BackgroundColor = new SKColor(245, 245, 245) // #F5F5F5 - matching JSX
             };
             
+            // Header (top bar)
+            var header = new SceneNode
+            {
+                Type = NodeType.Container,
+                X = 0,
+                Y = 0,
+                Width = Width,
+                Height = 60,
+                BackgroundColor = new SKColor(59, 130, 246) // #3B82F6 - blue
+            };
+            
+            // App title
             var title = new SceneNode
             {
                 Type = NodeType.Text,
                 X = 20,
-                Y = 50,
-                Text = "MBV Application",
-                FontSize = 32,
-                TextColor = SKColors.DarkBlue
+                Y = 15,
+                Text = "MBV Application (Default UI)",
+                FontSize = 24,
+                TextColor = SKColors.White
             };
-            root.AddChild(title);
+            header.AddChild(title);
             
-            var subtitle = new SceneNode
+            // User info
+            var userInfo = new SceneNode
+            {
+                Type = NodeType.Text,
+                X = 650,
+                Y = 20,
+                Text = "User: Guest",
+                FontSize = 16,
+                TextColor = SKColors.White
+            };
+            header.AddChild(userInfo);
+            
+            // Add header to root
+            root.AddChild(header);
+            
+            // Sidebar
+            var sidebar = new SceneNode
+            {
+                Id = "sidebar",
+                Type = NodeType.Container,
+                X = 0,
+                Y = 60,
+                Width = 200,
+                Height = 540,
+                BackgroundColor = new SKColor(240, 249, 255), // #F0F9FF - light blue
+                BorderColor = new SKColor(148, 163, 184), // #94A3B8 - gray
+                BorderWidth = 1
+            };
+            
+            // Navigation header
+            var navHeader = new SceneNode
             {
                 Type = NodeType.Text,
                 X = 20,
-                Y = 100,
-                Text = "UI DSL file not found. This is a default fallback UI.",
+                Y = 20,
+                Text = "Navigation",
                 FontSize = 18,
-                TextColor = SKColors.Gray
+                TextColor = new SKColor(71, 85, 105) // #475569 - slate
             };
-            root.AddChild(subtitle);
+            sidebar.AddChild(navHeader);
             
+            // Home button
+            var homeButton = new SceneNode
+            {
+                Type = NodeType.Rectangle,
+                X = 10,
+                Y = 50,
+                Width = 180,
+                Height = 40,
+                FillColor = new SKColor(219, 234, 254), // #DBEAFE - light blue
+                BorderColor = new SKColor(59, 130, 246), // #3B82F6 - blue
+                BorderWidth = 2,
+                OnClick = "NavigateTo:home"
+            };
+            var homeText = new SceneNode
+            {
+                Type = NodeType.Text,
+                X = 20,
+                Y = 12,
+                Text = "Home",
+                FontSize = 16,
+                TextColor = new SKColor(30, 64, 175) // #1E40AF - dark blue
+            };
+            homeButton.AddChild(homeText);
+            sidebar.AddChild(homeButton);
+            
+            // Add sidebar to root
+            root.AddChild(sidebar);
+            
+            // Main content area
+            var content = new SceneNode
+            {
+                Type = NodeType.Container,
+                X = 200, 
+                Y = 60,
+                Width = 600,
+                Height = 540
+            };
+            
+            // Inner content container
+            var innerContent = new SceneNode
+            {
+                Type = NodeType.Container,
+                X = 20,
+                Y = 20,
+                Width = 560,
+                Height = 500
+            };
+            
+            // Welcome text
+            var welcomeTitle = new SceneNode
+            {
+                Type = NodeType.Text,
+                X = 0,
+                Y = 0,
+                Text = "Welcome to MBV",
+                FontSize = 32,
+                TextColor = new SKColor(51, 65, 85) // #334155 - slate
+            };
+            innerContent.AddChild(welcomeTitle);
+            
+            var welcomeSubtitle = new SceneNode
+            {
+                Type = NodeType.Text,
+                X = 0,
+                Y = 50,
+                Text = "This is a sample application built with Message → Backend → View architecture.",
+                FontSize = 16,
+                TextColor = new SKColor(100, 116, 139) // #64748B - slate
+            };
+            innerContent.AddChild(welcomeSubtitle);
+            
+            // Get started button
+            var getStartedButton = new SceneNode
+            {
+                Type = NodeType.Rectangle,
+                X = 0,
+                Y = 100,
+                Width = 200,
+                Height = 50,
+                FillColor = new SKColor(59, 130, 246), // #3B82F6 - blue
+                BorderColor = new SKColor(30, 64, 175), // #1E40AF - dark blue
+                BorderWidth = 2,
+                OnClick = "ShowMessage:Welcome to MBV! This is the default UI created when no JSX file was found."
+            };
+            var buttonText = new SceneNode
+            {
+                Type = NodeType.Text,
+                X = 40,
+                Y = 15,
+                Text = "Get Started",
+                FontSize = 18,
+                TextColor = SKColors.White
+            };
+            getStartedButton.AddChild(buttonText);
+            innerContent.AddChild(getStartedButton);
+            
+            // Add inner content to main content area
+            content.AddChild(innerContent);
+            
+            // Add content area to root
+            root.AddChild(content);
+            
+            Console.WriteLine("Default UI created successfully");
             return root;
         }
 
@@ -553,88 +713,102 @@ namespace Frontend.Desktop
                 
             if (contentContainer == null) return;
             
-            // Find the content area's inner container
-            var innerContainer = contentContainer.Children.Find(c => 
-                c.Type == UiDsl.NodeType.Container && c.Width > 400);
-                
-            if (innerContainer == null && contentContainer.Children.Count > 0)
-            {
-                innerContainer = contentContainer.Children[0];
-            }
+            // Replace the entire content container instead of just inner content
+            // to ensure all previous elements are removed
+            contentContainer.Children.Clear();
             
-            // If we found a container to update
-            if (innerContainer != null)
+            // Create fresh inner container
+            var innerContainer = new UiDsl.SceneNode
             {
-                // Clear existing children
-                innerContainer.Children.Clear();
-                
-                // Add a title based on the view
-                var titleText = view switch
-                {
-                    "home" => "Home Page",
-                    "notes" => "Notes Page",
-                    "settings" => "Settings Page",
-                    _ => $"View: {view}"
-                };
-                
-                var titleNode = new UiDsl.SceneNode
+                Type = UiDsl.NodeType.Container,
+                X = 20,
+                Y = 20,
+                Width = 560,
+                Height = 500
+            };
+            contentContainer.AddChild(innerContainer);
+            
+            // Add a title based on the view
+            var titleText = view switch
+            {
+                "home" => "Welcome to MBV",
+                "notes" => "Notes Page",
+                "settings" => "Settings Page",
+                _ => $"View: {view}"
+            };
+            
+            var titleNode = new UiDsl.SceneNode
+            {
+                Type = UiDsl.NodeType.Text,
+                X = 0,
+                Y = 20,
+                Text = titleText,
+                FontSize = 32,
+                TextColor = new SKColor(51, 65, 85)
+            };
+            innerContainer.AddChild(titleNode);
+            
+            // Add some content
+            var contentText = view switch
+            {
+                "home" => "Welcome to the home page of the MBV application!",
+                "notes" => "This is where your notes would be displayed.",
+                "settings" => "Here you can configure application settings.",
+                _ => $"Content for '{view}' view"
+            };
+            
+            var contentNode = new UiDsl.SceneNode
+            {
+                Type = UiDsl.NodeType.Text,
+                X = 0,
+                Y = 80,
+                Text = contentText,
+                FontSize = 16,
+                TextColor = new SKColor(100, 116, 139)
+            };
+            innerContainer.AddChild(contentNode);
+            
+            // Add architecture description text for home page
+            if (view == "home")
+            {
+                var descriptionNode = new UiDsl.SceneNode
                 {
                     Type = UiDsl.NodeType.Text,
                     X = 0,
-                    Y = 0,
-                    Text = titleText,
-                    FontSize = 32,
-                    TextColor = new SKColor(51, 65, 85)
-                };
-                innerContainer.AddChild(titleNode);
-                
-                // Add some content
-                var contentText = view switch
-                {
-                    "home" => "Welcome to the home page of the MBV application!",
-                    "notes" => "This is where your notes would be displayed.",
-                    "settings" => "Here you can configure application settings.",
-                    _ => $"Content for '{view}' view"
-                };
-                
-                var contentNode = new UiDsl.SceneNode
-                {
-                    Type = UiDsl.NodeType.Text,
-                    X = 0,
-                    Y = 50,
-                    Text = contentText,
+                    Y = 110,
+                    Text = "This is a sample application built with Message → Backend → View architecture.",
                     FontSize = 16,
                     TextColor = new SKColor(100, 116, 139)
                 };
-                innerContainer.AddChild(contentNode);
-                
-                // Add a button
-                var button = new UiDsl.SceneNode
-                {
-                    Type = UiDsl.NodeType.Rectangle,
-                    X = 0,
-                    Y = 100,
-                    Width = 200,
-                    Height = 50,
-                    FillColor = new SKColor(59, 130, 246),
-                    BorderColor = new SKColor(29, 78, 216),
-                    BorderWidth = 2,
-                    OnClick = $"ShowMessage:{titleText} button clicked!"
-                };
-                
-                var buttonText = new UiDsl.SceneNode
-                {
-                    Type = UiDsl.NodeType.Text,
-                    X = 40,
-                    Y = 15,
-                    Text = "Click Me",
-                    FontSize = 18,
-                    TextColor = SKColors.White
-                };
-                button.AddChild(buttonText);
-                
-                innerContainer.AddChild(button);
+                innerContainer.AddChild(descriptionNode);
             }
+            
+            // Add a button
+            var button = new UiDsl.SceneNode
+            {
+                Type = UiDsl.NodeType.Rectangle,
+                X = 0,
+                Y = 160,
+                Width = 200,
+                Height = 50,
+                FillColor = new SKColor(59, 130, 246),
+                BorderColor = new SKColor(29, 78, 216),
+                BorderWidth = 2,
+                OnClick = $"ShowMessage:{titleText} button clicked!"
+            };
+            
+            var buttonText = new UiDsl.SceneNode
+            {
+                Type = UiDsl.NodeType.Text,
+                X = 40,
+                Y = 15,
+                Text = view == "home" ? "Get Started" : "Click Me",
+                FontSize = 18,
+                TextColor = SKColors.White
+            };
+            button.AddChild(buttonText);
+            
+            innerContainer.AddChild(button);
             
             // Highlight the selected navigation item
             HighlightSelectedNavItem(view);

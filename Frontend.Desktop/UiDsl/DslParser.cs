@@ -9,6 +9,13 @@ namespace Frontend.Desktop.UiDsl
 {
     public class DslParser
     {
+        private readonly JsxParser _jsxParser;
+
+        public DslParser()
+        {
+            _jsxParser = new JsxParser();
+        }
+
         /// <summary>
         /// Parses a .skx file and returns a scene graph
         /// </summary>
@@ -28,13 +35,22 @@ namespace Frontend.Desktop.UiDsl
         {
             try
             {
-                // Support both JSON and simplified DSL format
-                if (content.TrimStart().StartsWith("{"))
+                // Support multiple formats: JSON, JSX, and simplified DSL
+                string trimmedContent = content.TrimStart();
+                
+                if (trimmedContent.StartsWith("<"))
                 {
+                    // JSX format
+                    return _jsxParser.ParseString(content);
+                }
+                else if (trimmedContent.StartsWith("{"))
+                {
+                    // JSON format
                     return ParseJson(content);
                 }
                 else
                 {
+                    // Simplified DSL format
                     return ParseSimplifiedDsl(content);
                 }
             }
